@@ -105,28 +105,32 @@ def inject_css() -> None:
         """
         <style>
             .block-container {
-                padding-top: 2rem;
+                padding-top: 1.5rem;
                 padding-bottom: 2rem;
-                max-width: 1180px;
+                max-width: 1120px;
             }
 
             [data-testid="stSidebar"] {
-                background: linear-gradient(180deg, #f6fbf4 0%, #ffffff 100%);
+                background: #f7fbf5;
                 border-right: 1px solid rgba(46, 125, 50, 0.12);
             }
 
+            [data-testid="stSidebarContent"] {
+                padding-top: 1.25rem;
+            }
+
             .hero-card {
-                padding: 1.6rem 1.8rem;
-                border-radius: 24px;
-                background: linear-gradient(135deg, #f1f8ed 0%, #ffffff 58%, #fff7ec 100%);
-                border: 1px solid rgba(46, 125, 50, 0.12);
-                box-shadow: 0 18px 45px rgba(27, 94, 32, 0.08);
-                margin-bottom: 1.1rem;
+                padding: 1.1rem 1.25rem;
+                border-radius: 18px;
+                background: linear-gradient(135deg, #f1f8ed 0%, #ffffff 70%, #fff7ec 100%);
+                border: 1px solid rgba(46, 125, 50, 0.14);
+                box-shadow: 0 10px 28px rgba(27, 94, 32, 0.06);
+                margin-bottom: 1rem;
             }
 
             .hero-title {
-                font-size: 2.35rem;
-                line-height: 1.05;
+                font-size: 1.65rem;
+                line-height: 1.15;
                 font-weight: 800;
                 color: #123f18;
                 margin: 0;
@@ -134,62 +138,63 @@ def inject_css() -> None:
 
             .hero-subtitle {
                 color: #647067;
-                font-size: 1rem;
-                margin-top: 0.55rem;
+                font-size: 0.95rem;
+                margin-top: 0.35rem;
             }
 
             .sheet-pill {
                 display: inline-flex;
                 align-items: center;
-                gap: 0.45rem;
-                padding: 0.45rem 0.75rem;
+                gap: 0.4rem;
+                padding: 0.38rem 0.7rem;
                 border-radius: 999px;
                 background: #eaf6e7;
                 color: #2e7d32;
                 font-weight: 700;
                 border: 1px solid rgba(46, 125, 50, 0.18);
-                margin-top: 1rem;
-                font-size: 0.9rem;
+                margin-top: 0.75rem;
+                font-size: 0.85rem;
             }
 
             .metric-card {
-                padding: 1rem 1.1rem;
-                border-radius: 18px;
+                padding: 0.9rem 1rem;
+                border-radius: 16px;
                 background: #ffffff;
                 border: 1px solid rgba(18, 63, 24, 0.10);
-                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.045);
+                box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
+                min-height: 92px;
             }
 
             .metric-label {
                 color: #6b746d;
-                font-size: 0.83rem;
-                margin-bottom: 0.2rem;
+                font-size: 0.82rem;
+                margin-bottom: 0.25rem;
             }
 
             .metric-value {
                 color: #123f18;
-                font-size: 1.45rem;
+                font-size: 1.35rem;
                 font-weight: 800;
             }
 
             .preview-wrapper {
-                padding: 1.1rem;
-                border-radius: 26px;
-                background: linear-gradient(180deg, #f7fbf5 0%, #ffffff 100%);
+                padding: 1rem;
+                border-radius: 20px;
+                background: #ffffff;
                 border: 1px solid rgba(46, 125, 50, 0.12);
-                box-shadow: 0 16px 40px rgba(0, 0, 0, 0.055);
+                box-shadow: 0 10px 28px rgba(0, 0, 0, 0.045);
             }
 
             .day-chip-row {
                 display: flex;
-                gap: 0.55rem;
+                gap: 0.45rem;
                 flex-wrap: wrap;
-                margin: 0.8rem 0 1rem 0;
+                margin: 0.7rem 0 0.9rem 0;
             }
 
             .day-chip {
-                padding: 0.55rem 0.85rem;
-                border-radius: 16px;
+                padding: 0.45rem 0.7rem;
+                border-radius: 14px;
                 background: #ffffff;
                 color: #566058;
                 border: 1px solid rgba(0, 0, 0, 0.08);
@@ -203,35 +208,35 @@ def inject_css() -> None:
             }
 
             .date-banner {
-                padding: 0.85rem 1rem;
-                border-radius: 18px;
+                padding: 0.75rem 0.9rem;
+                border-radius: 16px;
                 background: #eef8e9;
                 color: #2e7d32;
                 font-weight: 800;
-                margin-bottom: 1rem;
+                margin-bottom: 0.9rem;
                 border: 1px solid rgba(46, 125, 50, 0.14);
             }
 
             .meal-card {
-                padding: 1.2rem;
-                border-radius: 24px;
+                padding: 1rem;
+                border-radius: 18px;
                 background: #ffffff;
                 border: 1px solid rgba(0, 0, 0, 0.07);
-                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
+                box-shadow: 0 8px 22px rgba(0, 0, 0, 0.045);
             }
 
             .meal-title {
-                font-size: 1.65rem;
+                font-size: 1.35rem;
                 color: #e07016;
                 font-weight: 850;
-                margin-bottom: 0.8rem;
+                margin-bottom: 0.65rem;
             }
 
             .menu-row {
                 display: grid;
-                grid-template-columns: minmax(120px, 190px) 1fr;
-                gap: 1rem;
-                padding: 0.65rem 0;
+                grid-template-columns: minmax(110px, 170px) 1fr;
+                gap: 0.8rem;
+                padding: 0.55rem 0;
                 border-bottom: 1px solid rgba(0, 0, 0, 0.075);
             }
 
@@ -250,9 +255,9 @@ def inject_css() -> None:
             }
 
             .notice-card {
-                padding: 1rem 1.1rem;
-                margin-top: 1rem;
-                border-radius: 20px;
+                padding: 0.85rem 1rem;
+                margin-top: 0.85rem;
+                border-radius: 16px;
                 background: #fff8ea;
                 border: 1px solid rgba(224, 112, 22, 0.18);
             }
@@ -260,34 +265,26 @@ def inject_css() -> None:
             .notice-title {
                 color: #d36313;
                 font-weight: 850;
-                font-size: 1.15rem;
-                margin-bottom: 0.25rem;
+                font-size: 1.05rem;
+                margin-bottom: 0.2rem;
             }
 
             .soft-caption {
                 color: #6c746e;
-                font-size: 0.9rem;
+                font-size: 0.88rem;
             }
 
-            .section-card {
-                padding: 1.15rem;
-                border-radius: 22px;
-                background: #ffffff;
-                border: 1px solid rgba(18, 63, 24, 0.10);
-                box-shadow: 0 10px 28px rgba(0, 0, 0, 0.045);
-                margin-bottom: 1rem;
-            }
-
-            div[data-testid="stButton"] > button {
-                border-radius: 14px;
+            div[data-testid="stButton"] > button,
+            div[data-testid="stDownloadButton"] > button {
+                border-radius: 12px;
                 font-weight: 750;
             }
 
             div[data-testid="stForm"] {
-                border-radius: 20px;
+                border-radius: 18px;
                 border: 1px solid rgba(18, 63, 24, 0.10);
-                padding: 1rem;
-                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.035);
+                padding: 0.9rem;
+                box-shadow: 0 6px 18px rgba(0, 0, 0, 0.035);
             }
         </style>
         """,
