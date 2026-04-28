@@ -719,12 +719,17 @@ def render_preview(dataframe: pd.DataFrame) -> None:
     )
 
 
-def save_actions(config: AppConfig, dataframe: pd.DataFrame) -> None:
+def save_actions(config: AppConfig, dataframe: pd.DataFrame, key_prefix: str) -> None:
     st.divider()
     col1, col2, col3 = st.columns([1.4, 1, 1])
 
     with col1:
-        if st.button("💾 Salvar alterações na planilha", type="primary", use_container_width=True):
+        if st.button(
+            "💾 Salvar alterações na planilha",
+            type="primary",
+            use_container_width=True,
+            key=f"{key_prefix}_save_button",
+        ):
             errors = validate_dataframe(dataframe)
             if errors:
                 for error in errors:
@@ -739,7 +744,11 @@ def save_actions(config: AppConfig, dataframe: pd.DataFrame) -> None:
                     st.balloons()
 
     with col2:
-        if st.button("🔄 Recarregar", use_container_width=True):
+        if st.button(
+            "🔄 Recarregar",
+            use_container_width=True,
+            key=f"{key_prefix}_reload_button",
+        ):
             load_menu_dataframe.clear()
             st.rerun()
 
@@ -751,6 +760,7 @@ def save_actions(config: AppConfig, dataframe: pd.DataFrame) -> None:
             file_name="cardapio.csv",
             mime="text/csv",
             use_container_width=True,
+            key=f"{key_prefix}_download_csv_button",
         )
 
 
@@ -794,11 +804,11 @@ def main() -> None:
 
     with tab_quick:
         working_dataframe = render_quick_edit(working_dataframe)
-        save_actions(config, working_dataframe)
+        save_actions(config, working_dataframe, key_prefix="quick")
 
     with tab_table:
         table_dataframe = render_complete_editor(working_dataframe)
-        save_actions(config, table_dataframe)
+        save_actions(config, table_dataframe, key_prefix="table")
 
     with tab_preview:
         render_preview(working_dataframe)
