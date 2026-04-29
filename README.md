@@ -69,6 +69,8 @@ Também aceita variáveis de ambiente:
 
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
+- `USER_USERNAME`
+- `USER_PASSWORD`
 - `COMMON_USERNAME`
 - `COMMON_PASSWORD`
 

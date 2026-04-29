@@ -115,8 +115,14 @@ def get_auth_config() -> AuthConfig:
 
     if not user_account.is_configured:
         user_account = UserAccount(
-            username=get_secret_value("COMMON_USERNAME"),
-            password=get_secret_value("COMMON_PASSWORD"),
+            username=(
+                get_secret_value("USER_USERNAME")
+                or get_secret_value("COMMON_USERNAME")
+            ),
+            password=(
+                get_secret_value("USER_PASSWORD")
+                or get_secret_value("COMMON_PASSWORD")
+            ),
             role="user",
         )
 
