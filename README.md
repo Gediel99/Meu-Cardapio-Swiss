@@ -91,3 +91,24 @@ Nela você consegue:
 - gravar esse acesso na aba `usuarios` da mesma planilha
 
 As senhas são salvas no formato hash e os usuários cadastrados passam a funcionar também no Streamlit Cloud.
+
+## 7. Modelos de refeição e campos extras
+
+Na aba `Modelos e campos`, o administrador consegue:
+
+- cadastrar refeições prontas como `Strogonoff`
+- salvar prato principal, acompanhamento, salada, sobremesa e aviso
+- aplicar esse modelo depois na `Edição rápida`
+- criar colunas extras na planilha quando precisar guardar uma informação nova
+
+## 8. Preparar próxima semana
+
+No topo do painel, o administrador agora tem um botão `Preparar próxima semana`.
+
+Ele:
+
+- cria automaticamente segunda a sexta da próxima semana
+- limpa os campos de prato, acompanhamento, salada e sobremesa
+- mantém o aviso padrão
+
+Assim você não precisa montar a estrutura da semana nova à mão.

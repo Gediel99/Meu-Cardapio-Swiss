@@ -6,7 +6,7 @@ import html
 import json
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import gspread
@@ -17,7 +17,9 @@ from google.oauth2.service_account import Credentials
 DEFAULT_SHEET_ID = "1lJznRnmCxV6ulrVsMBbnVi1qD-FCOapLfh3Hv7fxNoE"
 DEFAULT_WORKSHEET = "cardapio"
 DEFAULT_USERS_WORKSHEET = "usuarios"
-SHEET_COLUMNS = [
+DEFAULT_TEMPLATES_WORKSHEET = "modelos_refeicao"
+
+BASE_SHEET_COLUMNS = [
     "dia",
     "data",
     "prato_principal",
@@ -28,14 +30,29 @@ SHEET_COLUMNS = [
     "ultima_atualizacao",
 ]
 USER_COLUMNS = ["username", "password_hash", "role", "active", "created_at"]
-WEEKDAY_OPTIONS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+TEMPLATE_COLUMNS = [
+    "nome_modelo",
+    "prato_principal",
+    "acompanhamento",
+    "salada",
+    "sobremesa",
+    "aviso",
+]
+WEEK_TEMPLATE = [
+    ("Seg", 0),
+    ("Ter", 1),
+    ("Qua", 2),
+    ("Qui", 3),
+    ("Sex", 4),
+]
+WEEKDAY_OPTIONS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"]
 WEEKDAY_FULL_NAMES = {
     "Seg": "Segunda-feira",
     "Ter": "Terça-feira",
     "Qua": "Quarta-feira",
     "Qui": "Quinta-feira",
     "Sex": "Sexta-feira",
-    "Sáb": "Sábado",
+    "Sab": "Sábado",
     "Dom": "Domingo",
 }
 MONTH_NAMES = {
@@ -80,85 +97,24 @@ class AuthConfig:
         return any(account.is_configured for account in self.accounts)
 
 
+@dataclass(frozen=True)
+class MealTemplate:
+    name: str
+    main_dish: str
+    side_dish: str
+    salad: str
+    dessert: str
+    notice: str
+
+
 def get_secret_value(key: str, default: str = "") -> str:
     if key in st.secrets:
         return str(st.secrets[key])
     return os.getenv(key, default)
 
 
-def _read_account(section: Any, role: str) -> UserAccount:
-    if isinstance(section, dict):
-        username = str(section.get("username", "")).strip()
-        password = str(section.get("password", "")).strip()
-        return UserAccount(username=username, password=password, role=role)
-    return UserAccount(username="", password="", role=role)
-
-
-def get_auth_config() -> AuthConfig:
-    auth_section = st.secrets.get("auth", {}) if hasattr(st, "secrets") else {}
-
-    admin_account = _read_account(auth_section.get("admin", {}), "admin")
-    user_account = _read_account(auth_section.get("user", {}), "user")
-
-    if not admin_account.is_configured:
-        admin_account = UserAccount(
-            username=(
-                get_secret_value("ADMIN_USERNAME")
-                or str(auth_section.get("username", "")).strip()
-            ),
-            password=(
-                get_secret_value("ADMIN_PASSWORD")
-                or str(auth_section.get("password", "")).strip()
-            ),
-            role="admin",
-        )
-
-    if not user_account.is_configured:
-        user_account = UserAccount(
-            username=(
-                get_secret_value("USER_USERNAME")
-                or get_secret_value("COMMON_USERNAME")
-            ),
-            password=(
-                get_secret_value("USER_PASSWORD")
-                or get_secret_value("COMMON_PASSWORD")
-            ),
-            role="user",
-        )
-
-    return AuthConfig(accounts=(admin_account, user_account))
-
-
-def authenticate(
-    username: str,
-    password: str,
-    auth_config: AuthConfig,
-) -> UserAccount | None:
-    typed_username = username.strip()
-    typed_password = password.strip()
-
-    for account in auth_config.accounts:
-        if not account.is_configured:
-            continue
-
-        username_ok = hmac.compare_digest(typed_username, account.username)
-        password_ok = hmac.compare_digest(typed_password, account.password)
-        if username_ok and password_ok:
-            return account
-
-    try:
-        for account in load_registered_users(DEFAULT_SHEET_ID):
-            username_ok = hmac.compare_digest(typed_username, account.username)
-            password_ok = hmac.compare_digest(
-                hash_password(typed_password),
-                account.password,
-            )
-            if username_ok and password_ok:
-                return account
-    except Exception:
-        pass
-
-    return None
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def is_admin() -> bool:
@@ -183,7 +139,7 @@ def inject_css() -> None:
             }
 
             .block-container {
-                max-width: 1160px;
+                max-width: 1180px;
                 padding-top: 3.4rem;
                 padding-bottom: 2rem;
             }
@@ -281,7 +237,7 @@ def inject_css() -> None:
                 margin-top: 0.45rem;
                 color: #647067;
                 font-size: 1rem;
-                max-width: 40rem;
+                max-width: 42rem;
             }
 
             .hero-logo {
@@ -290,22 +246,6 @@ def inject_css() -> None:
                 color: #123f18;
                 font-weight: 800;
                 font-size: 1.05rem;
-            }
-
-            @media (max-width: 900px) {
-                .hero-top {
-                    flex-direction: column;
-                }
-
-                .hero-logo {
-                    min-width: auto;
-                    text-align: left;
-                }
-
-                .menu-row {
-                    grid-template-columns: 1fr;
-                    gap: 0.25rem;
-                }
             }
 
             .sheet-pill {
@@ -461,10 +401,101 @@ def inject_css() -> None:
                 color: #6c756d;
                 font-size: 0.88rem;
             }
+
+            @media (max-width: 900px) {
+                .hero-top {
+                    flex-direction: column;
+                }
+
+                .hero-logo {
+                    min-width: auto;
+                    text-align: left;
+                }
+
+                .menu-row {
+                    grid-template-columns: 1fr;
+                    gap: 0.25rem;
+                }
+            }
         </style>
         """,
         unsafe_allow_html=True,
     )
+
+
+def _read_account(section: Any, role: str) -> UserAccount:
+    if isinstance(section, dict):
+        username = str(section.get("username", "")).strip()
+        password = str(section.get("password", "")).strip()
+        return UserAccount(username=username, password=password, role=role)
+    return UserAccount(username="", password="", role=role)
+
+
+def get_auth_config() -> AuthConfig:
+    auth_section = st.secrets.get("auth", {}) if hasattr(st, "secrets") else {}
+
+    admin_account = _read_account(auth_section.get("admin", {}), "admin")
+    user_account = _read_account(auth_section.get("user", {}), "user")
+
+    if not admin_account.is_configured:
+        admin_account = UserAccount(
+            username=(
+                get_secret_value("ADMIN_USERNAME")
+                or str(auth_section.get("username", "")).strip()
+            ),
+            password=(
+                get_secret_value("ADMIN_PASSWORD")
+                or str(auth_section.get("password", "")).strip()
+            ),
+            role="admin",
+        )
+
+    if not user_account.is_configured:
+        user_account = UserAccount(
+            username=(
+                get_secret_value("USER_USERNAME")
+                or get_secret_value("COMMON_USERNAME")
+            ),
+            password=(
+                get_secret_value("USER_PASSWORD")
+                or get_secret_value("COMMON_PASSWORD")
+            ),
+            role="user",
+        )
+
+    return AuthConfig(accounts=(admin_account, user_account))
+
+
+def authenticate(
+    username: str,
+    password: str,
+    auth_config: AuthConfig,
+) -> UserAccount | None:
+    typed_username = username.strip()
+    typed_password = password.strip()
+
+    for account in auth_config.accounts:
+        if not account.is_configured:
+            continue
+
+        username_ok = hmac.compare_digest(typed_username, account.username)
+        password_ok = hmac.compare_digest(typed_password, account.password)
+        if username_ok and password_ok:
+            return account
+
+    try:
+        for account in load_registered_users(DEFAULT_SHEET_ID):
+            username_ok = hmac.compare_digest(typed_username, account.username)
+            password_ok = hmac.compare_digest(
+                hash_password(typed_password),
+                account.password,
+            )
+            if username_ok and password_ok:
+                return account
+    except Exception:
+        pass
+
+    return None
 
 
 def require_login() -> None:
@@ -481,7 +512,7 @@ def require_login() -> None:
     if st.session_state.get("authenticated") is True:
         return
 
-    left, center, right = st.columns([1, 1.1, 1])
+    _, center, _ = st.columns([1, 1.1, 1])
     with center:
         st.markdown(
             """
@@ -537,10 +568,6 @@ def _load_service_account_info() -> dict[str, Any]:
     )
 
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
 @st.cache_resource(show_spinner=False)
 def get_gspread_client() -> gspread.Client:
     credentials = Credentials.from_service_account_info(
@@ -553,12 +580,34 @@ def get_gspread_client() -> gspread.Client:
     return gspread.authorize(credentials)
 
 
+def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
+    normalized = dataframe.copy()
+    for column in BASE_SHEET_COLUMNS:
+        if column not in normalized.columns:
+            normalized[column] = ""
+
+    ordered_columns = BASE_SHEET_COLUMNS + [
+        column for column in normalized.columns if column not in BASE_SHEET_COLUMNS
+    ]
+    normalized = normalized[ordered_columns].fillna("")
+
+    for column in ordered_columns:
+        normalized[column] = normalized[column].astype(str).str.strip()
+
+    return normalized
+
+
+def get_extra_columns(dataframe: pd.DataFrame) -> list[str]:
+    normalized = normalize_dataframe(dataframe)
+    return [column for column in normalized.columns if column not in BASE_SHEET_COLUMNS]
+
+
 @st.cache_data(show_spinner=False, ttl=30)
 def load_menu_dataframe(sheet_id: str, worksheet_name: str) -> pd.DataFrame:
     worksheet = get_gspread_client().open_by_key(sheet_id).worksheet(worksheet_name)
     records = worksheet.get_all_records()
     if not records:
-        return pd.DataFrame(columns=SHEET_COLUMNS)
+        return pd.DataFrame(columns=BASE_SHEET_COLUMNS)
     return normalize_dataframe(pd.DataFrame(records))
 
 
@@ -573,7 +622,6 @@ def load_registered_users(sheet_id: str) -> tuple[UserAccount, ...]:
 
     records = worksheet.get_all_records()
     accounts: list[UserAccount] = []
-
     for row in records:
         username = str(row.get("username", "")).strip()
         password_hash = str(row.get("password_hash", "")).strip()
@@ -582,24 +630,44 @@ def load_registered_users(sheet_id: str) -> tuple[UserAccount, ...]:
 
         if not username or not password_hash or active in {"false", "0", "no"}:
             continue
-
         if role not in {"admin", "user"}:
             role = "user"
 
-        accounts.append(
-            UserAccount(
-                username=username,
-                password=password_hash,
-                role=role,
-            )
-        )
+        accounts.append(UserAccount(username=username, password=password_hash, role=role))
 
     return tuple(accounts)
 
 
+@st.cache_data(show_spinner=False, ttl=30)
+def load_meal_templates(sheet_id: str) -> tuple[MealTemplate, ...]:
+    try:
+        worksheet = get_gspread_client().open_by_key(sheet_id).worksheet(
+            DEFAULT_TEMPLATES_WORKSHEET
+        )
+    except gspread.WorksheetNotFound:
+        return ()
+
+    records = worksheet.get_all_records()
+    templates: list[MealTemplate] = []
+    for row in records:
+        template_name = str(row.get("nome_modelo", "")).strip()
+        if not template_name:
+            continue
+        templates.append(
+            MealTemplate(
+                name=template_name,
+                main_dish=str(row.get("prato_principal", "")).strip(),
+                side_dish=str(row.get("acompanhamento", "")).strip(),
+                salad=str(row.get("salada", "")).strip(),
+                dessert=str(row.get("sobremesa", "")).strip(),
+                notice=str(row.get("aviso", "")).strip(),
+            )
+        )
+    return tuple(templates)
+
+
 def ensure_users_worksheet(sheet_id: str) -> gspread.Worksheet:
     spreadsheet = get_gspread_client().open_by_key(sheet_id)
-
     try:
         worksheet = spreadsheet.worksheet(DEFAULT_USERS_WORKSHEET)
     except gspread.WorksheetNotFound:
@@ -611,18 +679,47 @@ def ensure_users_worksheet(sheet_id: str) -> gspread.Worksheet:
         worksheet.update("A1:E1", [USER_COLUMNS])
         return worksheet
 
-    first_row = worksheet.row_values(1)
-    if first_row[: len(USER_COLUMNS)] != USER_COLUMNS:
+    if worksheet.row_values(1)[: len(USER_COLUMNS)] != USER_COLUMNS:
         worksheet.update("A1:E1", [USER_COLUMNS])
-
     return worksheet
+
+
+def ensure_templates_worksheet(sheet_id: str) -> gspread.Worksheet:
+    spreadsheet = get_gspread_client().open_by_key(sheet_id)
+    try:
+        worksheet = spreadsheet.worksheet(DEFAULT_TEMPLATES_WORKSHEET)
+    except gspread.WorksheetNotFound:
+        worksheet = spreadsheet.add_worksheet(
+            title=DEFAULT_TEMPLATES_WORKSHEET,
+            rows=50,
+            cols=len(TEMPLATE_COLUMNS),
+        )
+        worksheet.update("A1:F1", [TEMPLATE_COLUMNS])
+        return worksheet
+
+    if worksheet.row_values(1)[: len(TEMPLATE_COLUMNS)] != TEMPLATE_COLUMNS:
+        worksheet.update("A1:F1", [TEMPLATE_COLUMNS])
+    return worksheet
+
+
+def save_menu_dataframe(config: AppConfig, dataframe: pd.DataFrame) -> None:
+    worksheet = get_gspread_client().open_by_key(config.sheet_id).worksheet(
+        config.worksheet_name
+    )
+    normalized = normalize_dataframe(dataframe)
+    columns = normalized.columns.tolist()
+    rows = [columns] + normalized.astype(str).values.tolist()
+    worksheet.clear()
+    end_column_letter = chr(64 + min(len(columns), 26))
+    worksheet.update(f"A1:{end_column_letter}1", [columns])
+    worksheet.update("A1", rows, value_input_option="USER_ENTERED")
+    load_menu_dataframe.clear()
 
 
 def save_registered_user(sheet_id: str, username: str, password: str, role: str) -> None:
     worksheet = ensure_users_worksheet(sheet_id)
     username = username.strip()
     password_hash = hash_password(password.strip())
-    role = role.strip().lower()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     records = worksheet.get_all_records()
@@ -633,8 +730,7 @@ def save_registered_user(sheet_id: str, username: str, password: str, role: str)
             existing_row_number = index
             break
 
-    values = [[username, password_hash, role, "TRUE", timestamp]]
-
+    values = [[username, password_hash, role.strip().lower(), "TRUE", timestamp]]
     if existing_row_number is not None:
         worksheet.update(f"A{existing_row_number}:E{existing_row_number}", values)
     else:
@@ -656,26 +752,31 @@ def update_registered_user_role(sheet_id: str, username: str, role: str) -> None
     raise ValueError("Usuário não encontrado para alteração de perfil.")
 
 
-def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
-    normalized = dataframe.copy()
-    for column in SHEET_COLUMNS:
-        if column not in normalized.columns:
-            normalized[column] = ""
-    normalized = normalized[SHEET_COLUMNS].fillna("")
-    for column in SHEET_COLUMNS:
-        normalized[column] = normalized[column].astype(str).str.strip()
-    return normalized
+def save_meal_template(sheet_id: str, template: MealTemplate) -> None:
+    worksheet = ensure_templates_worksheet(sheet_id)
+    records = worksheet.get_all_records()
+    existing_row_number: int | None = None
 
+    for index, row in enumerate(records, start=2):
+        if str(row.get("nome_modelo", "")).strip().lower() == template.name.lower():
+            existing_row_number = index
+            break
 
-def save_menu_dataframe(config: AppConfig, dataframe: pd.DataFrame) -> None:
-    worksheet = get_gspread_client().open_by_key(config.sheet_id).worksheet(
-        config.worksheet_name
-    )
-    normalized = normalize_dataframe(dataframe)
-    rows = [SHEET_COLUMNS] + normalized.astype(str).values.tolist()
-    worksheet.clear()
-    worksheet.update("A1", rows, value_input_option="USER_ENTERED")
-    load_menu_dataframe.clear()
+    values = [[
+        template.name,
+        template.main_dish,
+        template.side_dish,
+        template.salad,
+        template.dessert,
+        template.notice,
+    ]]
+
+    if existing_row_number is not None:
+        worksheet.update(f"A{existing_row_number}:F{existing_row_number}", values)
+    else:
+        worksheet.append_rows(values, value_input_option="USER_ENTERED")
+
+    load_meal_templates.clear()
 
 
 def validate_dataframe(dataframe: pd.DataFrame) -> list[str]:
@@ -724,8 +825,52 @@ def build_default_dataframe() -> pd.DataFrame:
                 "ultima_atualizacao": "08:15",
             }
         ],
-        columns=SHEET_COLUMNS,
+        columns=BASE_SHEET_COLUMNS,
     )
+
+
+def get_next_monday(reference_date: date) -> date:
+    days_until_next_monday = (7 - reference_date.weekday()) % 7
+    if days_until_next_monday == 0:
+        days_until_next_monday = 7
+    return reference_date + timedelta(days=days_until_next_monday)
+
+
+def build_next_week_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
+    normalized = normalize_dataframe(dataframe).reset_index(drop=True)
+    valid_dates = [
+        parse_iso_date(value)
+        for value in normalized["data"].tolist()
+        if str(value).strip()
+    ]
+    base_date = max(valid_dates) if valid_dates else date.today()
+    next_monday = get_next_monday(base_date)
+    extra_columns = get_extra_columns(normalized)
+    notice = "Cardápio sujeito a alterações."
+
+    if not normalized.empty:
+        first_notice = str(normalized.iloc[0]["aviso"]).strip()
+        if first_notice:
+            notice = first_notice
+
+    rows: list[dict[str, str]] = []
+    for weekday_label, day_offset in WEEK_TEMPLATE:
+        current_date = next_monday + timedelta(days=day_offset)
+        row = {
+            "dia": weekday_label,
+            "data": current_date.strftime("%Y-%m-%d"),
+            "prato_principal": "",
+            "acompanhamento": "",
+            "salada": "",
+            "sobremesa": "",
+            "aviso": notice,
+            "ultima_atualizacao": "",
+        }
+        for column in extra_columns:
+            row[column] = ""
+        rows.append(row)
+
+    return normalize_dataframe(pd.DataFrame(rows))
 
 
 def parse_iso_date(value: str) -> date:
@@ -759,6 +904,61 @@ def get_row_display_label(dataframe: pd.DataFrame, index: int) -> str:
     short_date = format_short_date(row["data"])
     main_dish = row["prato_principal"] or "Sem prato definido"
     return f"{weekday_full} • {short_date} • {main_dish}"
+
+
+def initialize_draft(dataframe: pd.DataFrame, config: AppConfig) -> None:
+    sheet_key = f"{config.sheet_id}:{config.worksheet_name}"
+    if st.session_state.get("draft_sheet_key") != sheet_key:
+        st.session_state["draft_sheet_key"] = sheet_key
+        st.session_state["draft_df"] = normalize_dataframe(dataframe).copy()
+
+
+def get_draft_dataframe() -> pd.DataFrame:
+    draft = st.session_state.get("draft_df")
+    if draft is None or not isinstance(draft, pd.DataFrame):
+        draft = build_default_dataframe()
+        st.session_state["draft_df"] = draft
+    return normalize_dataframe(draft)
+
+
+def set_draft_dataframe(dataframe: pd.DataFrame) -> None:
+    st.session_state["draft_df"] = normalize_dataframe(dataframe).copy()
+
+
+def add_extra_column_to_draft(dataframe: pd.DataFrame, column_name: str) -> pd.DataFrame:
+    normalized = normalize_dataframe(dataframe).copy()
+    safe_column_name = column_name.strip()
+
+    if not safe_column_name:
+        raise ValueError("Informe um nome de campo.")
+    if safe_column_name in normalized.columns:
+        raise ValueError("Esse campo já existe na planilha.")
+
+    normalized[safe_column_name] = ""
+    return normalize_dataframe(normalized)
+
+
+def apply_template_to_row(
+    dataframe: pd.DataFrame,
+    row_index: int,
+    template_name: str,
+    templates: tuple[MealTemplate, ...],
+) -> pd.DataFrame:
+    selected_template = next(
+        (template for template in templates if template.name == template_name),
+        None,
+    )
+    if selected_template is None:
+        raise ValueError("Modelo não encontrado.")
+
+    normalized = normalize_dataframe(dataframe).reset_index(drop=True)
+    normalized.loc[row_index, "prato_principal"] = selected_template.main_dish
+    normalized.loc[row_index, "acompanhamento"] = selected_template.side_dish
+    normalized.loc[row_index, "salada"] = selected_template.salad
+    normalized.loc[row_index, "sobremesa"] = selected_template.dessert
+    if selected_template.notice:
+        normalized.loc[row_index, "aviso"] = selected_template.notice
+    return normalize_dataframe(normalized)
 
 
 def render_sidebar() -> AppConfig:
@@ -809,13 +1009,40 @@ def render_header() -> None:
     )
 
 
-def render_user_management() -> None:
+def render_metrics(dataframe: pd.DataFrame) -> None:
+    normalized = normalize_dataframe(dataframe)
+    total_days = len(normalized[normalized["data"].ne("")])
+    filled_main_dishes = normalized["prato_principal"].ne("").sum()
+    last_updates = [value for value in normalized["ultima_atualizacao"].tolist() if value]
+    last_update = last_updates[-1] if last_updates else "-"
+
+    col1, col2, col3 = st.columns(3)
+    cards = [
+        ("Dias cadastrados", str(total_days)),
+        ("Pratos principais", str(filled_main_dishes)),
+        ("Última atualização", last_update),
+    ]
+
+    for column, (label, value) in zip([col1, col2, col3], cards):
+        with column:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">{html.escape(label)}</div>
+                    <div class="metric-value">{html.escape(value)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def render_user_management(sheet_id: str) -> None:
     st.markdown(
         """
         <div class="panel-card">
             <div class="panel-title">Cadastro de usuários</div>
             <div class="panel-subtitle">
-                Crie acessos e defina se a pessoa será usuário comum ou administrador.
+                Crie acessos e promova perfis quando for necessário.
             </div>
         </div>
         """,
@@ -849,107 +1076,149 @@ def render_user_management() -> None:
             st.error("A confirmação de senha não confere.")
         else:
             try:
-                save_registered_user(DEFAULT_SHEET_ID, username, password, "user")
+                save_registered_user(sheet_id, username, password, "user")
             except Exception as error:  # noqa: BLE001
                 st.error(f"Erro ao cadastrar usuário: {error}")
             else:
                 st.success("Usuário salvo com sucesso como Usuário comum.")
 
-    accounts = load_registered_users(DEFAULT_SHEET_ID)
-    if accounts:
-        users_df = pd.DataFrame(
-            [{"username": account.username, "role": account.role} for account in accounts]
-        )
-        users_df["role"] = users_df["role"].map(
-            {"admin": "Administrador", "user": "Usuário comum"}
-        )
-        st.dataframe(users_df, use_container_width=True, hide_index=True)
-
-        st.markdown("### Alterar perfil")
-        manageable_users = [account.username for account in accounts]
-        with st.form("change_role_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                selected_user = st.selectbox(
-                    "Usuário cadastrado",
-                    options=manageable_users,
-                )
-            with col2:
-                new_role = st.selectbox(
-                    "Novo perfil",
-                    options=["user", "admin"],
-                    format_func=lambda value: "Usuário comum" if value == "user" else "Administrador",
-                )
-
-            submitted_role = st.form_submit_button(
-                "Atualizar perfil",
-                use_container_width=True,
-            )
-
-        if submitted_role:
-            try:
-                update_registered_user_role(DEFAULT_SHEET_ID, selected_user, new_role)
-            except Exception as error:  # noqa: BLE001
-                st.error(f"Erro ao atualizar perfil: {error}")
-            else:
-                st.success("Perfil atualizado com sucesso.")
-    else:
+    accounts = load_registered_users(sheet_id)
+    if not accounts:
         st.info("Nenhum usuário cadastrado ainda na aba 'usuarios'.")
+        return
+
+    users_df = pd.DataFrame(
+        [{"username": account.username, "role": account.role} for account in accounts]
+    )
+    users_df["role"] = users_df["role"].map(
+        {"admin": "Administrador", "user": "Usuário comum"}
+    )
+    st.dataframe(users_df, use_container_width=True, hide_index=True)
+
+    st.markdown("### Alterar perfil")
+    manageable_users = [account.username for account in accounts]
+    with st.form("change_role_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_user = st.selectbox("Usuário cadastrado", options=manageable_users)
+        with col2:
+            new_role = st.selectbox(
+                "Novo perfil",
+                options=["user", "admin"],
+                format_func=lambda value: "Usuário comum" if value == "user" else "Administrador",
+            )
+
+        submitted_role = st.form_submit_button(
+            "Atualizar perfil",
+            use_container_width=True,
+        )
+
+    if submitted_role:
+        try:
+            update_registered_user_role(sheet_id, selected_user, new_role)
+        except Exception as error:  # noqa: BLE001
+            st.error(f"Erro ao atualizar perfil: {error}")
+        else:
+            st.success("Perfil atualizado com sucesso.")
 
 
-def render_metrics(dataframe: pd.DataFrame) -> None:
-    normalized = normalize_dataframe(dataframe)
-    total_days = len(normalized[normalized["data"].ne("")])
-    filled_main_dishes = normalized["prato_principal"].ne("").sum()
-    last_updates = [value for value in normalized["ultima_atualizacao"].tolist() if value]
-    last_update = last_updates[-1] if last_updates else "-"
+def render_template_management(sheet_id: str) -> None:
+    st.markdown(
+        """
+        <div class="panel-card">
+            <div class="panel-title">Modelos de refeição</div>
+            <div class="panel-subtitle">
+                Cadastre pratos que vocês fazem sempre para puxar tudo mais rápido depois.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    col1, col2, col3 = st.columns(3)
-    cards = [
-        ("Dias cadastrados", str(total_days)),
-        ("Pratos principais", str(filled_main_dishes)),
-        ("Última atualização", last_update),
-    ]
+    with st.form("template_form"):
+        template_name = st.text_input("Nome do modelo", placeholder="Ex.: Strogonoff")
+        main_dish = st.text_input("Prato principal")
+        side_dish = st.text_input("Acompanhamento")
+        col1, col2 = st.columns(2)
+        with col1:
+            salad = st.text_input("Salada")
+        with col2:
+            dessert = st.text_input("Sobremesa")
+        notice = st.text_area("Aviso padrão", value="Cardápio sujeito a alterações.", height=90)
 
-    for column, (label, value) in zip([col1, col2, col3], cards):
-        with column:
-            st.markdown(
-                f"""
-                <div class="metric-card">
-                    <div class="metric-label">{html.escape(label)}</div>
-                    <div class="metric-value">{html.escape(value)}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
+        submitted = st.form_submit_button(
+            "Salvar modelo",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if submitted:
+        if not template_name.strip():
+            st.error("Informe o nome do modelo.")
+        else:
+            try:
+                save_meal_template(
+                    sheet_id,
+                    MealTemplate(
+                        name=template_name.strip(),
+                        main_dish=main_dish.strip(),
+                        side_dish=side_dish.strip(),
+                        salad=salad.strip(),
+                        dessert=dessert.strip(),
+                        notice=notice.strip(),
+                    ),
+                )
+            except Exception as error:  # noqa: BLE001
+                st.error(f"Erro ao salvar modelo: {error}")
+            else:
+                st.success("Modelo salvo com sucesso.")
+
+    templates = load_meal_templates(sheet_id)
+    if templates:
+        templates_df = pd.DataFrame(
+            [
+                {
+                    "Modelo": template.name,
+                    "Prato principal": template.main_dish,
+                    "Acompanhamento": template.side_dish,
+                    "Salada": template.salad,
+                    "Sobremesa": template.dessert,
+                }
+                for template in templates
+            ]
+        )
+        st.dataframe(templates_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhum modelo cadastrado ainda.")
+
+    st.markdown("### Criar campo extra na planilha")
+    st.caption("Use isso quando precisar guardar uma informação nova além dos campos padrão.")
+    with st.form("extra_column_form"):
+        column_name = st.text_input(
+            "Nome do novo campo",
+            placeholder="Ex.: bebida, molho, observacao_chef",
+        )
+        submitted_column = st.form_submit_button("Adicionar campo", use_container_width=True)
+
+    if submitted_column:
+        try:
+            updated = add_extra_column_to_draft(get_draft_dataframe(), column_name)
+        except Exception as error:  # noqa: BLE001
+            st.error(str(error))
+        else:
+            set_draft_dataframe(updated)
+            st.success(
+                "Campo extra adicionado na tela. Salve a planilha para gravar essa nova coluna."
             )
 
 
-def initialize_draft(dataframe: pd.DataFrame, config: AppConfig) -> None:
-    sheet_key = f"{config.sheet_id}:{config.worksheet_name}"
-    if st.session_state.get("draft_sheet_key") != sheet_key:
-        st.session_state["draft_sheet_key"] = sheet_key
-        st.session_state["draft_df"] = normalize_dataframe(dataframe).copy()
-
-
-def get_draft_dataframe() -> pd.DataFrame:
-    draft = st.session_state.get("draft_df")
-    if draft is None or not isinstance(draft, pd.DataFrame):
-        draft = build_default_dataframe()
-        st.session_state["draft_df"] = draft
-    return normalize_dataframe(draft)
-
-
-def set_draft_dataframe(dataframe: pd.DataFrame) -> None:
-    st.session_state["draft_df"] = normalize_dataframe(dataframe).copy()
-
-
-def render_quick_edit(dataframe: pd.DataFrame) -> None:
+def render_quick_edit(dataframe: pd.DataFrame, sheet_id: str) -> None:
     st.markdown(
         """
         <div class="panel-card">
             <div class="panel-title">Edição rápida por dia</div>
             <div class="panel-subtitle">
-                Altere um dia específico sem mexer na tabela inteira.
+                Edite um dia específico ou puxe um modelo pronto para acelerar o cadastro.
             </div>
         </div>
         """,
@@ -967,7 +1236,37 @@ def render_quick_edit(dataframe: pd.DataFrame) -> None:
         key="quick_edit_day",
         format_func=lambda index: get_row_display_label(normalized, index),
     )
-    current = normalized.iloc[selected_index]
+
+    templates = load_meal_templates(sheet_id)
+    if templates:
+        template_names = [template.name for template in templates]
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            selected_template = st.selectbox(
+                "Modelo de refeição",
+                options=template_names,
+                index=None,
+                placeholder="Selecione um modelo salvo",
+                key="quick_edit_template",
+            )
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("Aplicar modelo", use_container_width=True):
+                if selected_template:
+                    updated = apply_template_to_row(
+                        normalized,
+                        selected_index,
+                        selected_template,
+                        templates,
+                    )
+                    set_draft_dataframe(updated)
+                    st.success("Modelo aplicado ao dia selecionado.")
+                    st.rerun()
+                else:
+                    st.warning("Selecione um modelo antes de aplicar.")
+
+    current = normalize_dataframe(get_draft_dataframe()).reset_index(drop=True).iloc[selected_index]
 
     with st.form("quick_edit_form"):
         col1, col2, col3 = st.columns(3)
@@ -1005,7 +1304,8 @@ def render_quick_edit(dataframe: pd.DataFrame) -> None:
         )
 
     if submitted:
-        normalized.loc[selected_index, SHEET_COLUMNS] = {
+        working = normalize_dataframe(get_draft_dataframe()).reset_index(drop=True)
+        working.loc[selected_index, BASE_SHEET_COLUMNS] = {
             "dia": dia,
             "data": data_value.strftime("%Y-%m-%d"),
             "prato_principal": prato_principal.strip(),
@@ -1015,7 +1315,7 @@ def render_quick_edit(dataframe: pd.DataFrame) -> None:
             "aviso": aviso.strip(),
             "ultima_atualizacao": ultima_atualizacao.strip(),
         }
-        set_draft_dataframe(normalized)
+        set_draft_dataframe(working)
         st.success("Alteração aplicada na tela. Agora você pode salvar na planilha.")
 
 
@@ -1025,38 +1325,44 @@ def render_complete_editor(dataframe: pd.DataFrame) -> None:
         <div class="panel-card">
             <div class="panel-title">Tabela completa</div>
             <div class="panel-subtitle">
-                Use este modo para adicionar, remover ou editar várias linhas.
+                Use este modo para editar em massa e também preencher campos extras.
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    normalized = normalize_dataframe(dataframe)
+    column_config: dict[str, Any] = {
+        "dia": st.column_config.SelectboxColumn(
+            "Dia",
+            options=WEEKDAY_OPTIONS,
+            required=True,
+            width="small",
+        ),
+        "data": st.column_config.TextColumn("Data", help="Formato YYYY-MM-DD", width="medium"),
+        "prato_principal": st.column_config.TextColumn("Prato principal", width="large"),
+        "acompanhamento": st.column_config.TextColumn("Acompanhamento", width="large"),
+        "salada": st.column_config.TextColumn("Salada", width="medium"),
+        "sobremesa": st.column_config.TextColumn("Sobremesa", width="medium"),
+        "aviso": st.column_config.TextColumn("Aviso", width="large"),
+        "ultima_atualizacao": st.column_config.TextColumn(
+            "Última atualização",
+            help="Formato HH:MM",
+            width="small",
+        ),
+    }
+
+    for extra_column in get_extra_columns(normalized):
+        column_config[extra_column] = st.column_config.TextColumn(extra_column, width="medium")
+
     edited = st.data_editor(
-        normalize_dataframe(dataframe),
+        normalized,
         key="full_editor",
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
-        column_config={
-            "dia": st.column_config.SelectboxColumn(
-                "Dia",
-                options=WEEKDAY_OPTIONS,
-                required=True,
-                width="small",
-            ),
-            "data": st.column_config.TextColumn("Data", help="Formato YYYY-MM-DD", width="medium"),
-            "prato_principal": st.column_config.TextColumn("Prato principal", width="large"),
-            "acompanhamento": st.column_config.TextColumn("Acompanhamento", width="large"),
-            "salada": st.column_config.TextColumn("Salada", width="medium"),
-            "sobremesa": st.column_config.TextColumn("Sobremesa", width="medium"),
-            "aviso": st.column_config.TextColumn("Aviso", width="large"),
-            "ultima_atualizacao": st.column_config.TextColumn(
-                "Última atualização",
-                help="Formato HH:MM",
-                width="small",
-            ),
-        },
+        column_config=column_config,
     )
     set_draft_dataframe(edited)
 
@@ -1091,7 +1397,7 @@ def render_preview(dataframe: pd.DataFrame) -> None:
 
     chips_html = "".join(
         f'<div class="day-chip {"active" if day == row["dia"] else ""}">{html.escape(day)}</div>'
-        for day in WEEKDAY_OPTIONS[:5]
+        for day in [item[0] for item in WEEK_TEMPLATE]
     )
 
     display_date = html.escape(format_display_date(row["dia"], row["data"]))
@@ -1152,7 +1458,7 @@ def render_csv_preview(dataframe: pd.DataFrame) -> None:
 
 def render_action_bar(config: AppConfig, dataframe: pd.DataFrame) -> None:
     if is_admin():
-        col1, col2, col3 = st.columns([1.45, 1, 1])
+        col1, col2, col3, col4 = st.columns([1.2, 1, 1, 1.15])
     else:
         col1, col2 = st.columns([1.45, 1])
 
@@ -1187,6 +1493,14 @@ def render_action_bar(config: AppConfig, dataframe: pd.DataFrame) -> None:
                 mime="text/csv",
                 use_container_width=True,
             )
+
+        with col4:
+            if st.button("Preparar próxima semana", use_container_width=True):
+                set_draft_dataframe(build_next_week_dataframe(dataframe))
+                st.success(
+                    "Nova semana criada com segunda a sexta e campos de comida em branco."
+                )
+                st.rerun()
 
 
 def main() -> None:
@@ -1224,12 +1538,19 @@ def main() -> None:
     st.write("")
 
     if is_admin():
-        tab_quick, tab_table, tab_preview, tab_csv, tab_users = st.tabs(
-            ["Edição rápida", "Tabela completa", "Prévia do app", "CSV", "Usuários"]
+        tab_quick, tab_table, tab_preview, tab_csv, tab_users, tab_templates = st.tabs(
+            [
+                "Edição rápida",
+                "Tabela completa",
+                "Prévia do app",
+                "CSV",
+                "Usuários",
+                "Modelos e campos",
+            ]
         )
 
         with tab_quick:
-            render_quick_edit(get_draft_dataframe())
+            render_quick_edit(get_draft_dataframe(), config.sheet_id)
 
         with tab_table:
             render_complete_editor(get_draft_dataframe())
@@ -1241,12 +1562,15 @@ def main() -> None:
             render_csv_preview(get_draft_dataframe())
 
         with tab_users:
-            render_user_management()
+            render_user_management(config.sheet_id)
+
+        with tab_templates:
+            render_template_management(config.sheet_id)
     else:
         tab_quick, tab_preview = st.tabs(["Edição rápida", "Prévia do app"])
 
         with tab_quick:
-            render_quick_edit(get_draft_dataframe())
+            render_quick_edit(get_draft_dataframe(), config.sheet_id)
 
         with tab_preview:
             render_preview(get_draft_dataframe())
