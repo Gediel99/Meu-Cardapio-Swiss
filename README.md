@@ -76,3 +76,15 @@ Também aceita variáveis de ambiente:
 
 - `admin`: edição rápida, tabela completa, prévia do app, CSV e configuração da planilha
 - `user`: apenas edição rápida e prévia do app
+
+## 6. Cadastro de funcionários no painel
+
+Quando você entra como `admin`, aparece uma aba `Usuários`.
+
+Nela você consegue:
+
+- cadastrar um novo login
+- escolher se o perfil será `Usuário comum` ou `Administrador`
+- gravar esse acesso na aba `usuarios` da mesma planilha
+
+As senhas são salvas no formato hash e os usuários cadastrados passam a funcionar também no Streamlit Cloud.

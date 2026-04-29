@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import html
 import json
@@ -15,6 +16,7 @@ from google.oauth2.service_account import Credentials
 
 DEFAULT_SHEET_ID = "1lJznRnmCxV6ulrVsMBbnVi1qD-FCOapLfh3Hv7fxNoE"
 DEFAULT_WORKSHEET = "cardapio"
+DEFAULT_USERS_WORKSHEET = "usuarios"
 SHEET_COLUMNS = [
     "dia",
     "data",
@@ -25,6 +27,7 @@ SHEET_COLUMNS = [
     "aviso",
     "ultima_atualizacao",
 ]
+USER_COLUMNS = ["username", "password_hash", "role", "active", "created_at"]
 WEEKDAY_OPTIONS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
 WEEKDAY_FULL_NAMES = {
     "Seg": "Segunda-feira",
@@ -136,6 +139,18 @@ def authenticate(
         password_ok = hmac.compare_digest(typed_password, account.password)
         if username_ok and password_ok:
             return account
+
+    try:
+        for account in load_registered_users(DEFAULT_SHEET_ID):
+            username_ok = hmac.compare_digest(typed_username, account.username)
+            password_ok = hmac.compare_digest(
+                hash_password(typed_password),
+                account.password,
+            )
+            if username_ok and password_ok:
+                return account
+    except Exception:
+        pass
 
     return None
 
@@ -516,6 +531,10 @@ def _load_service_account_info() -> dict[str, Any]:
     )
 
 
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
 @st.cache_resource(show_spinner=False)
 def get_gspread_client() -> gspread.Client:
     credentials = Credentials.from_service_account_info(
@@ -535,6 +554,87 @@ def load_menu_dataframe(sheet_id: str, worksheet_name: str) -> pd.DataFrame:
     if not records:
         return pd.DataFrame(columns=SHEET_COLUMNS)
     return normalize_dataframe(pd.DataFrame(records))
+
+
+@st.cache_data(show_spinner=False, ttl=30)
+def load_registered_users(sheet_id: str) -> tuple[UserAccount, ...]:
+    try:
+        worksheet = get_gspread_client().open_by_key(sheet_id).worksheet(
+            DEFAULT_USERS_WORKSHEET
+        )
+    except gspread.WorksheetNotFound:
+        return ()
+
+    records = worksheet.get_all_records()
+    accounts: list[UserAccount] = []
+
+    for row in records:
+        username = str(row.get("username", "")).strip()
+        password_hash = str(row.get("password_hash", "")).strip()
+        role = str(row.get("role", "user")).strip().lower() or "user"
+        active = str(row.get("active", "TRUE")).strip().lower()
+
+        if not username or not password_hash or active in {"false", "0", "no"}:
+            continue
+
+        if role not in {"admin", "user"}:
+            role = "user"
+
+        accounts.append(
+            UserAccount(
+                username=username,
+                password=password_hash,
+                role=role,
+            )
+        )
+
+    return tuple(accounts)
+
+
+def ensure_users_worksheet(sheet_id: str) -> gspread.Worksheet:
+    spreadsheet = get_gspread_client().open_by_key(sheet_id)
+
+    try:
+        worksheet = spreadsheet.worksheet(DEFAULT_USERS_WORKSHEET)
+    except gspread.WorksheetNotFound:
+        worksheet = spreadsheet.add_worksheet(
+            title=DEFAULT_USERS_WORKSHEET,
+            rows=50,
+            cols=len(USER_COLUMNS),
+        )
+        worksheet.update("A1:E1", [USER_COLUMNS])
+        return worksheet
+
+    first_row = worksheet.row_values(1)
+    if first_row[: len(USER_COLUMNS)] != USER_COLUMNS:
+        worksheet.update("A1:E1", [USER_COLUMNS])
+
+    return worksheet
+
+
+def save_registered_user(sheet_id: str, username: str, password: str, role: str) -> None:
+    worksheet = ensure_users_worksheet(sheet_id)
+    username = username.strip()
+    password_hash = hash_password(password.strip())
+    role = role.strip().lower()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    records = worksheet.get_all_records()
+    existing_row_number: int | None = None
+
+    for index, row in enumerate(records, start=2):
+        if str(row.get("username", "")).strip().lower() == username.lower():
+            existing_row_number = index
+            break
+
+    values = [[username, password_hash, role, "TRUE", timestamp]]
+
+    if existing_row_number is not None:
+        worksheet.update(f"A{existing_row_number}:E{existing_row_number}", values)
+    else:
+        worksheet.append_rows(values, value_input_option="USER_ENTERED")
+
+    load_registered_users.clear()
 
 
 def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -679,6 +779,70 @@ def render_header() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_user_management() -> None:
+    st.markdown(
+        """
+        <div class="panel-card">
+            <div class="panel-title">Cadastro de usuários</div>
+            <div class="panel-subtitle">
+                Crie acessos e defina se a pessoa será usuário comum ou administrador.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.form("create_user_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            username = st.text_input("Usuário do funcionário")
+            role = st.selectbox(
+                "Perfil",
+                options=["user", "admin"],
+                format_func=lambda value: "Usuário comum" if value == "user" else "Administrador",
+            )
+        with col2:
+            password = st.text_input("Senha", type="password")
+            password_confirm = st.text_input("Confirmar senha", type="password")
+
+        submitted = st.form_submit_button(
+            "Cadastrar usuário",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if submitted:
+        username = username.strip()
+        password = password.strip()
+        password_confirm = password_confirm.strip()
+
+        if not username:
+            st.error("Informe um nome de usuário.")
+        elif len(password) < 4:
+            st.error("A senha deve ter pelo menos 4 caracteres.")
+        elif password != password_confirm:
+            st.error("A confirmação de senha não confere.")
+        else:
+            try:
+                save_registered_user(DEFAULT_SHEET_ID, username, password, role)
+            except Exception as error:  # noqa: BLE001
+                st.error(f"Erro ao cadastrar usuário: {error}")
+            else:
+                st.success("Usuário salvo com sucesso.")
+
+    accounts = load_registered_users(DEFAULT_SHEET_ID)
+    if accounts:
+        users_df = pd.DataFrame(
+            [{"username": account.username, "role": account.role} for account in accounts]
+        )
+        users_df["role"] = users_df["role"].map(
+            {"admin": "Administrador", "user": "Usuário comum"}
+        )
+        st.dataframe(users_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhum usuário cadastrado ainda na aba 'usuarios'.")
 
 
 def render_metrics(dataframe: pd.DataFrame) -> None:
@@ -1008,8 +1172,8 @@ def main() -> None:
     st.write("")
 
     if is_admin():
-        tab_quick, tab_table, tab_preview, tab_csv = st.tabs(
-            ["Edição rápida", "Tabela completa", "Prévia do app", "CSV"]
+        tab_quick, tab_table, tab_preview, tab_csv, tab_users = st.tabs(
+            ["Edição rápida", "Tabela completa", "Prévia do app", "CSV", "Usuários"]
         )
 
         with tab_quick:
@@ -1023,6 +1187,9 @@ def main() -> None:
 
         with tab_csv:
             render_csv_preview(get_draft_dataframe())
+
+        with tab_users:
+            render_user_management()
     else:
         tab_quick, tab_preview = st.tabs(["Edição rápida", "Prévia do app"])
 
