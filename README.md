@@ -51,11 +51,28 @@ password = "sua-senha-forte"
 streamlit run app.py
 ```
 
-## 4. O que o painel faz
+## 4. Perfis de acesso
 
-- login administrativo
-- edição rápida por dia
-- tabela completa com `st.data_editor`
-- prévia visual do cardápio
-- exportação CSV
-- gravação direta no Google Sheets
+Você pode configurar dois perfis:
+
+```toml
+[auth.admin]
+username = "admin"
+password = "senha-admin"
+
+[auth.user]
+username = "funcionario"
+password = "senha-funcionario"
+```
+
+Também aceita variáveis de ambiente:
+
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- `COMMON_USERNAME`
+- `COMMON_PASSWORD`
+
+## 5. O que cada perfil vê
+
+- `admin`: edição rápida, tabela completa, prévia do app, CSV e configuração da planilha
+- `user`: apenas edição rápida e prévia do app

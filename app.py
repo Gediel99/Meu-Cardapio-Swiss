@@ -58,13 +58,23 @@ class AppConfig:
 
 
 @dataclass(frozen=True)
-class AuthConfig:
+class UserAccount:
     username: str
     password: str
+    role: str
 
     @property
     def is_configured(self) -> bool:
         return bool(self.username.strip() and self.password.strip())
+
+
+@dataclass(frozen=True)
+class AuthConfig:
+    accounts: tuple[UserAccount, ...]
+
+    @property
+    def is_configured(self) -> bool:
+        return any(account.is_configured for account in self.accounts)
 
 
 def get_secret_value(key: str, default: str = "") -> str:
@@ -73,31 +83,71 @@ def get_secret_value(key: str, default: str = "") -> str:
     return os.getenv(key, default)
 
 
+def _read_account(section: Any, role: str) -> UserAccount:
+    if isinstance(section, dict):
+        username = str(section.get("username", "")).strip()
+        password = str(section.get("password", "")).strip()
+        return UserAccount(username=username, password=password, role=role)
+    return UserAccount(username="", password="", role=role)
+
+
 def get_auth_config() -> AuthConfig:
     auth_section = st.secrets.get("auth", {}) if hasattr(st, "secrets") else {}
 
-    username = ""
-    password = ""
+    admin_account = _read_account(auth_section.get("admin", {}), "admin")
+    user_account = _read_account(auth_section.get("user", {}), "user")
 
-    if isinstance(auth_section, dict):
-        username = str(auth_section.get("username", "")).strip()
-        password = str(auth_section.get("password", "")).strip()
+    if not admin_account.is_configured:
+        admin_account = UserAccount(
+            username=(
+                get_secret_value("ADMIN_USERNAME")
+                or str(auth_section.get("username", "")).strip()
+            ),
+            password=(
+                get_secret_value("ADMIN_PASSWORD")
+                or str(auth_section.get("password", "")).strip()
+            ),
+            role="admin",
+        )
 
-    username = username or get_secret_value("ADMIN_USERNAME").strip()
-    password = password or get_secret_value("ADMIN_PASSWORD").strip()
+    if not user_account.is_configured:
+        user_account = UserAccount(
+            username=get_secret_value("COMMON_USERNAME"),
+            password=get_secret_value("COMMON_PASSWORD"),
+            role="user",
+        )
 
-    return AuthConfig(username=username, password=password)
+    return AuthConfig(accounts=(admin_account, user_account))
 
 
-def authenticate(username: str, password: str, auth_config: AuthConfig) -> bool:
-    username_ok = hmac.compare_digest(username.strip(), auth_config.username)
-    password_ok = hmac.compare_digest(password.strip(), auth_config.password)
-    return username_ok and password_ok
+def authenticate(
+    username: str,
+    password: str,
+    auth_config: AuthConfig,
+) -> UserAccount | None:
+    typed_username = username.strip()
+    typed_password = password.strip()
+
+    for account in auth_config.accounts:
+        if not account.is_configured:
+            continue
+
+        username_ok = hmac.compare_digest(typed_username, account.username)
+        password_ok = hmac.compare_digest(typed_password, account.password)
+        if username_ok and password_ok:
+            return account
+
+    return None
+
+
+def is_admin() -> bool:
+    return st.session_state.get("auth_role") == "admin"
 
 
 def logout() -> None:
     st.session_state["authenticated"] = False
     st.session_state.pop("auth_username", None)
+    st.session_state.pop("auth_role", None)
     st.rerun()
 
 
@@ -402,7 +452,7 @@ def require_login() -> None:
     if not auth_config.is_configured:
         st.error("Login administrativo não configurado.")
         st.info(
-            "Configure ADMIN_USERNAME e ADMIN_PASSWORD nos Secrets do Streamlit Cloud "
+            "Configure usuários e senhas nos Secrets do Streamlit Cloud "
             "ou no arquivo .streamlit/secrets.toml local."
         )
         st.stop()
@@ -435,9 +485,11 @@ def require_login() -> None:
             )
 
         if submitted:
-            if authenticate(username, password, auth_config):
+            account = authenticate(username, password, auth_config)
+            if account is not None:
                 st.session_state["authenticated"] = True
-                st.session_state["auth_username"] = username.strip()
+                st.session_state["auth_username"] = account.username
+                st.session_state["auth_role"] = account.role
                 st.rerun()
             else:
                 st.error("Usuário ou senha inválidos.")
@@ -482,7 +534,6 @@ def load_menu_dataframe(sheet_id: str, worksheet_name: str) -> pd.DataFrame:
     records = worksheet.get_all_records()
     if not records:
         return pd.DataFrame(columns=SHEET_COLUMNS)
-
     return normalize_dataframe(pd.DataFrame(records))
 
 
@@ -491,7 +542,6 @@ def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     for column in SHEET_COLUMNS:
         if column not in normalized.columns:
             normalized[column] = ""
-
     normalized = normalized[SHEET_COLUMNS].fillna("")
     for column in SHEET_COLUMNS:
         normalized[column] = normalized[column].astype(str).str.strip()
@@ -585,22 +635,35 @@ def get_row_options(dataframe: pd.DataFrame) -> list[str]:
 
 def render_sidebar() -> AppConfig:
     with st.sidebar:
-        st.markdown("## Configuração")
-        sheet_id = st.text_input("ID da planilha", value=DEFAULT_SHEET_ID)
-        worksheet_name = st.text_input("Nome da aba", value=DEFAULT_WORKSHEET)
-        st.info("Compartilhe a planilha com o e-mail do service account como Editor.")
+        if is_admin():
+            st.markdown("## Configuração")
+            sheet_id = st.text_input("ID da planilha", value=DEFAULT_SHEET_ID)
+            worksheet_name = st.text_input("Nome da aba", value=DEFAULT_WORKSHEET)
+            st.info("Compartilhe a planilha com o e-mail do service account como Editor.")
+        else:
+            st.markdown("## Acesso")
+            sheet_id = DEFAULT_SHEET_ID
+            worksheet_name = DEFAULT_WORKSHEET
+            st.info("Você está no modo de edição rápida do cardápio.")
 
         st.divider()
         logged_user = st.session_state.get("auth_username", "administrador")
+        role_label = "Administrador" if is_admin() else "Usuário comum"
         st.caption(f"Logado como: **{logged_user}**")
+        st.caption(f"Perfil: **{role_label}**")
         st.button("Sair", use_container_width=True, on_click=logout)
 
     return AppConfig(sheet_id=sheet_id.strip(), worksheet_name=worksheet_name.strip())
 
 
 def render_header() -> None:
+    role_hint = (
+        "Controle completo da planilha e do painel."
+        if is_admin()
+        else "Edição rápida liberada para atualização do cardápio."
+    )
     st.markdown(
-        """
+        f"""
         <div class="hero-card">
             <div class="hero-top">
                 <div>
@@ -611,7 +674,7 @@ def render_header() -> None:
                 </div>
                 <div class="hero-logo">Swiss Park</div>
             </div>
-            <div class="sheet-pill">Google Sheets conectado</div>
+            <div class="sheet-pill">{html.escape(role_hint)}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -717,11 +780,7 @@ def render_quick_edit(dataframe: pd.DataFrame) -> None:
         with col5:
             sobremesa = st.text_input("Sobremesa", value=current["sobremesa"])
 
-        aviso = st.text_area(
-            "Aviso do dia",
-            value=current["aviso"],
-            height=100,
-        )
+        aviso = st.text_area("Aviso do dia", value=current["aviso"], height=100)
 
         submitted = st.form_submit_button(
             "Aplicar alteração neste dia",
@@ -770,19 +829,9 @@ def render_complete_editor(dataframe: pd.DataFrame) -> None:
                 required=True,
                 width="small",
             ),
-            "data": st.column_config.TextColumn(
-                "Data",
-                help="Formato YYYY-MM-DD",
-                width="medium",
-            ),
-            "prato_principal": st.column_config.TextColumn(
-                "Prato principal",
-                width="large",
-            ),
-            "acompanhamento": st.column_config.TextColumn(
-                "Acompanhamento",
-                width="large",
-            ),
+            "data": st.column_config.TextColumn("Data", help="Formato YYYY-MM-DD", width="medium"),
+            "prato_principal": st.column_config.TextColumn("Prato principal", width="large"),
+            "acompanhamento": st.column_config.TextColumn("Acompanhamento", width="large"),
             "salada": st.column_config.TextColumn("Salada", width="medium"),
             "sobremesa": st.column_config.TextColumn("Sobremesa", width="medium"),
             "aviso": st.column_config.TextColumn("Aviso", width="large"),
@@ -886,7 +935,10 @@ def render_csv_preview(dataframe: pd.DataFrame) -> None:
 
 
 def render_action_bar(config: AppConfig, dataframe: pd.DataFrame) -> None:
-    col1, col2, col3 = st.columns([1.45, 1, 1])
+    if is_admin():
+        col1, col2, col3 = st.columns([1.45, 1, 1])
+    else:
+        col1, col2 = st.columns([1.45, 1])
 
     with col1:
         if st.button("Salvar alterações na planilha", type="primary", use_container_width=True):
@@ -909,15 +961,16 @@ def render_action_bar(config: AppConfig, dataframe: pd.DataFrame) -> None:
             st.session_state.pop("draft_df", None)
             st.rerun()
 
-    with col3:
-        csv_data = normalize_dataframe(dataframe).to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            "Baixar CSV",
-            data=csv_data,
-            file_name="cardapio.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
+    if is_admin():
+        with col3:
+            csv_data = normalize_dataframe(dataframe).to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "Baixar CSV",
+                data=csv_data,
+                file_name="cardapio.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
 
 
 def main() -> None:
@@ -954,21 +1007,30 @@ def main() -> None:
     render_action_bar(config, get_draft_dataframe())
     st.write("")
 
-    tab_quick, tab_table, tab_preview, tab_csv = st.tabs(
-        ["Edição rápida", "Tabela completa", "Prévia do app", "CSV"]
-    )
+    if is_admin():
+        tab_quick, tab_table, tab_preview, tab_csv = st.tabs(
+            ["Edição rápida", "Tabela completa", "Prévia do app", "CSV"]
+        )
 
-    with tab_quick:
-        render_quick_edit(get_draft_dataframe())
+        with tab_quick:
+            render_quick_edit(get_draft_dataframe())
 
-    with tab_table:
-        render_complete_editor(get_draft_dataframe())
+        with tab_table:
+            render_complete_editor(get_draft_dataframe())
 
-    with tab_preview:
-        render_preview(get_draft_dataframe())
+        with tab_preview:
+            render_preview(get_draft_dataframe())
 
-    with tab_csv:
-        render_csv_preview(get_draft_dataframe())
+        with tab_csv:
+            render_csv_preview(get_draft_dataframe())
+    else:
+        tab_quick, tab_preview = st.tabs(["Edição rápida", "Prévia do app"])
+
+        with tab_quick:
+            render_quick_edit(get_draft_dataframe())
+
+        with tab_preview:
+            render_preview(get_draft_dataframe())
 
 
 if __name__ == "__main__":
