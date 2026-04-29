@@ -637,6 +637,19 @@ def save_registered_user(sheet_id: str, username: str, password: str, role: str)
     load_registered_users.clear()
 
 
+def update_registered_user_role(sheet_id: str, username: str, role: str) -> None:
+    worksheet = ensure_users_worksheet(sheet_id)
+    records = worksheet.get_all_records()
+
+    for index, row in enumerate(records, start=2):
+        if str(row.get("username", "")).strip().lower() == username.strip().lower():
+            worksheet.update(f"C{index}:D{index}", [[role.strip().lower(), "TRUE"]])
+            load_registered_users.clear()
+            return
+
+    raise ValueError("Usuário não encontrado para alteração de perfil.")
+
+
 def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     normalized = dataframe.copy()
     for column in SHEET_COLUMNS:
@@ -798,11 +811,6 @@ def render_user_management() -> None:
         col1, col2 = st.columns(2)
         with col1:
             username = st.text_input("Usuário do funcionário")
-            role = st.selectbox(
-                "Perfil",
-                options=["user", "admin"],
-                format_func=lambda value: "Usuário comum" if value == "user" else "Administrador",
-            )
         with col2:
             password = st.text_input("Senha", type="password")
             password_confirm = st.text_input("Confirmar senha", type="password")
@@ -826,11 +834,11 @@ def render_user_management() -> None:
             st.error("A confirmação de senha não confere.")
         else:
             try:
-                save_registered_user(DEFAULT_SHEET_ID, username, password, role)
+                save_registered_user(DEFAULT_SHEET_ID, username, password, "user")
             except Exception as error:  # noqa: BLE001
                 st.error(f"Erro ao cadastrar usuário: {error}")
             else:
-                st.success("Usuário salvo com sucesso.")
+                st.success("Usuário salvo com sucesso como Usuário comum.")
 
     accounts = load_registered_users(DEFAULT_SHEET_ID)
     if accounts:
@@ -841,6 +849,35 @@ def render_user_management() -> None:
             {"admin": "Administrador", "user": "Usuário comum"}
         )
         st.dataframe(users_df, use_container_width=True, hide_index=True)
+
+        st.markdown("### Alterar perfil")
+        manageable_users = [account.username for account in accounts]
+        with st.form("change_role_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_user = st.selectbox(
+                    "Usuário cadastrado",
+                    options=manageable_users,
+                )
+            with col2:
+                new_role = st.selectbox(
+                    "Novo perfil",
+                    options=["user", "admin"],
+                    format_func=lambda value: "Usuário comum" if value == "user" else "Administrador",
+                )
+
+            submitted_role = st.form_submit_button(
+                "Atualizar perfil",
+                use_container_width=True,
+            )
+
+        if submitted_role:
+            try:
+                update_registered_user_role(DEFAULT_SHEET_ID, selected_user, new_role)
+            except Exception as error:  # noqa: BLE001
+                st.error(f"Erro ao atualizar perfil: {error}")
+            else:
+                st.success("Perfil atualizado com sucesso.")
     else:
         st.info("Nenhum usuário cadastrado ainda na aba 'usuarios'.")
 

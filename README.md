@@ -84,7 +84,8 @@ Quando você entra como `admin`, aparece uma aba `Usuários`.
 Nela você consegue:
 
 - cadastrar um novo login
-- escolher se o perfil será `Usuário comum` ou `Administrador`
+- criar o acesso sempre como `Usuário comum`
+- promover depois para `Administrador` se quiser
 - gravar esse acesso na aba `usuarios` da mesma planilha
 
 As senhas são salvas no formato hash e os usuários cadastrados passam a funcionar também no Streamlit Cloud.
