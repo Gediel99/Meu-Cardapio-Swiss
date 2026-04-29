@@ -1,6 +1,6 @@
 # Painel Streamlit
 
-Painel simples para editar a aba `cardapio` do Google Sheets sem abrir a planilha manualmente.
+Painel administrativo para editar a aba `cardapio` do Google Sheets e publicar no Streamlit Cloud.
 
 ## 1. Instalar dependências
 
@@ -39,9 +39,13 @@ private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 client_email = "..."
 client_id = "..."
 token_uri = "https://oauth2.googleapis.com/token"
+
+[auth]
+username = "admin"
+password = "sua-senha-forte"
 ```
 
-## 3. Rodar
+## 3. Rodar localmente
 
 ```bash
 streamlit run app.py
@@ -49,8 +53,9 @@ streamlit run app.py
 
 ## 4. O que o painel faz
 
-- carrega a aba `cardapio`
-- permite editar, adicionar e remover linhas
-- valida `data` em `YYYY-MM-DD`
-- valida `ultima_atualizacao` em `HH:MM`
-- salva tudo de volta na planilha
+- login administrativo
+- edição rápida por dia
+- tabela completa com `st.data_editor`
+- prévia visual do cardápio
+- exportação CSV
+- gravação direta no Google Sheets

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import html
 import json
 import os
 from dataclasses import dataclass
@@ -88,133 +89,191 @@ def get_auth_config() -> AuthConfig:
     return AuthConfig(username=username, password=password)
 
 
-def logout() -> None:
-    st.session_state["authenticated"] = False
-    st.session_state.pop("auth_username", None)
-    st.rerun()
-
-
 def authenticate(username: str, password: str, auth_config: AuthConfig) -> bool:
     username_ok = hmac.compare_digest(username.strip(), auth_config.username)
     password_ok = hmac.compare_digest(password.strip(), auth_config.password)
     return username_ok and password_ok
 
 
+def logout() -> None:
+    st.session_state["authenticated"] = False
+    st.session_state.pop("auth_username", None)
+    st.rerun()
+
+
 def inject_css() -> None:
     st.markdown(
         """
         <style>
+            .stApp {
+                background:
+                    radial-gradient(circle at top right, rgba(234, 246, 231, 0.95), transparent 32%),
+                    linear-gradient(180deg, #f5fbf3 0%, #eff7ec 100%);
+            }
+
             .block-container {
-                padding-top: 1.5rem;
+                max-width: 1160px;
+                padding-top: 1.3rem;
                 padding-bottom: 2rem;
-                max-width: 1120px;
             }
 
             [data-testid="stSidebar"] {
                 background: #f7fbf5;
-                border-right: 1px solid rgba(46, 125, 50, 0.12);
+                border-right: 1px solid rgba(18, 63, 24, 0.08);
             }
 
             [data-testid="stSidebarContent"] {
                 padding-top: 1.25rem;
             }
 
-            .hero-card {
-                padding: 1.1rem 1.25rem;
+            div[data-testid="stButton"] > button,
+            div[data-testid="stDownloadButton"] > button,
+            div[data-testid="stFormSubmitButton"] > button {
+                border-radius: 14px;
+                font-weight: 700;
+                min-height: 2.8rem;
+            }
+
+            div[data-testid="stDataFrame"] {
                 border-radius: 18px;
-                background: linear-gradient(135deg, #f1f8ed 0%, #ffffff 70%, #fff7ec 100%);
-                border: 1px solid rgba(46, 125, 50, 0.14);
-                box-shadow: 0 10px 28px rgba(27, 94, 32, 0.06);
+                overflow: hidden;
+                border: 1px solid rgba(18, 63, 24, 0.08);
+            }
+
+            .hero-card {
+                padding: 1.3rem 1.4rem;
+                border-radius: 24px;
+                background: linear-gradient(135deg, #f2f9ef 0%, #ffffff 62%, #fff8ee 100%);
+                border: 1px solid rgba(46, 125, 50, 0.12);
+                box-shadow: 0 16px 44px rgba(18, 63, 24, 0.08);
                 margin-bottom: 1rem;
             }
 
+            .hero-top {
+                display: flex;
+                justify-content: space-between;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
             .hero-title {
-                font-size: 1.65rem;
-                line-height: 1.15;
-                font-weight: 800;
-                color: #123f18;
                 margin: 0;
+                color: #123f18;
+                font-size: 2rem;
+                line-height: 1.06;
+                font-weight: 850;
             }
 
             .hero-subtitle {
+                margin-top: 0.45rem;
                 color: #647067;
-                font-size: 0.95rem;
-                margin-top: 0.35rem;
+                font-size: 1rem;
+                max-width: 40rem;
+            }
+
+            .hero-logo {
+                min-width: 150px;
+                text-align: right;
+                color: #123f18;
+                font-weight: 800;
+                font-size: 1.05rem;
             }
 
             .sheet-pill {
                 display: inline-flex;
                 align-items: center;
-                gap: 0.4rem;
-                padding: 0.38rem 0.7rem;
+                gap: 0.45rem;
+                padding: 0.42rem 0.75rem;
                 border-radius: 999px;
                 background: #eaf6e7;
+                border: 1px solid rgba(46, 125, 50, 0.16);
                 color: #2e7d32;
-                font-weight: 700;
-                border: 1px solid rgba(46, 125, 50, 0.18);
-                margin-top: 0.75rem;
-                font-size: 0.85rem;
+                font-size: 0.88rem;
+                font-weight: 800;
+                margin-top: 0.9rem;
             }
 
             .metric-card {
-                padding: 0.9rem 1rem;
-                border-radius: 16px;
-                background: #ffffff;
-                border: 1px solid rgba(18, 63, 24, 0.10);
-                box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
-                min-height: 92px;
+                padding: 1rem 1.05rem;
+                border-radius: 18px;
+                background: rgba(255, 255, 255, 0.92);
+                border: 1px solid rgba(18, 63, 24, 0.08);
+                box-shadow: 0 8px 22px rgba(0, 0, 0, 0.04);
+                min-height: 98px;
             }
 
             .metric-label {
-                color: #6b746d;
-                font-size: 0.82rem;
-                margin-bottom: 0.25rem;
+                color: #6a766d;
+                font-size: 0.84rem;
+                margin-bottom: 0.28rem;
             }
 
             .metric-value {
                 color: #123f18;
-                font-size: 1.35rem;
-                font-weight: 800;
+                font-size: 1.42rem;
+                font-weight: 850;
             }
 
-            .preview-wrapper {
-                padding: 1rem;
-                border-radius: 20px;
+            .panel-card {
+                padding: 1rem 1.1rem;
+                border-radius: 22px;
+                background: rgba(255, 255, 255, 0.94);
+                border: 1px solid rgba(18, 63, 24, 0.08);
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+            }
+
+            .panel-title {
+                color: #123f18;
+                font-size: 1.12rem;
+                font-weight: 800;
+                margin-bottom: 0.2rem;
+            }
+
+            .panel-subtitle {
+                color: #687368;
+                font-size: 0.92rem;
+                margin-bottom: 0.9rem;
+            }
+
+            .preview-shell {
+                padding: 1.1rem;
+                border-radius: 24px;
                 background: #ffffff;
-                border: 1px solid rgba(46, 125, 50, 0.12);
-                box-shadow: 0 10px 28px rgba(0, 0, 0, 0.045);
+                border: 1px solid rgba(46, 125, 50, 0.10);
+                box-shadow: 0 16px 40px rgba(18, 63, 24, 0.06);
             }
 
             .day-chip-row {
                 display: flex;
-                gap: 0.45rem;
                 flex-wrap: wrap;
-                margin: 0.7rem 0 0.9rem 0;
+                gap: 0.5rem;
+                margin: 0.8rem 0 1rem 0;
             }
 
             .day-chip {
-                padding: 0.45rem 0.7rem;
+                padding: 0.5rem 0.75rem;
                 border-radius: 14px;
                 background: #ffffff;
-                color: #566058;
-                border: 1px solid rgba(0, 0, 0, 0.08);
+                border: 1px solid rgba(18, 63, 24, 0.10);
+                color: #5b675d;
                 font-weight: 700;
+                font-size: 0.9rem;
             }
 
             .day-chip.active {
                 background: #eaf6e7;
                 color: #2e7d32;
-                border: 1px solid rgba(46, 125, 50, 0.45);
+                border-color: rgba(46, 125, 50, 0.36);
             }
 
             .date-banner {
-                padding: 0.75rem 0.9rem;
+                padding: 0.82rem 0.95rem;
                 border-radius: 16px;
                 background: #eef8e9;
                 color: #2e7d32;
-                font-weight: 800;
+                font-weight: 850;
+                border: 1px solid rgba(46, 125, 50, 0.12);
                 margin-bottom: 0.9rem;
-                border: 1px solid rgba(46, 125, 50, 0.14);
             }
 
             .meal-card {
@@ -222,22 +281,22 @@ def inject_css() -> None:
                 border-radius: 18px;
                 background: #ffffff;
                 border: 1px solid rgba(0, 0, 0, 0.07);
-                box-shadow: 0 8px 22px rgba(0, 0, 0, 0.045);
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
             }
 
             .meal-title {
+                color: #df7317;
                 font-size: 1.35rem;
-                color: #e07016;
                 font-weight: 850;
-                margin-bottom: 0.65rem;
+                margin-bottom: 0.7rem;
             }
 
             .menu-row {
                 display: grid;
-                grid-template-columns: minmax(110px, 170px) 1fr;
-                gap: 0.8rem;
+                grid-template-columns: minmax(120px, 170px) 1fr;
+                gap: 0.75rem;
                 padding: 0.55rem 0;
-                border-bottom: 1px solid rgba(0, 0, 0, 0.075);
+                border-bottom: 1px solid rgba(0, 0, 0, 0.07);
             }
 
             .menu-row:last-child {
@@ -245,46 +304,33 @@ def inject_css() -> None:
             }
 
             .menu-label {
-                color: #5f6b63;
+                color: #5f6a61;
                 font-weight: 650;
             }
 
             .menu-value {
-                color: #181d19;
-                font-weight: 750;
+                color: #182019;
+                font-weight: 760;
             }
 
             .notice-card {
-                padding: 0.85rem 1rem;
-                margin-top: 0.85rem;
+                padding: 0.9rem 1rem;
+                margin-top: 0.9rem;
                 border-radius: 16px;
                 background: #fff8ea;
-                border: 1px solid rgba(224, 112, 22, 0.18);
+                border: 1px solid rgba(223, 115, 23, 0.16);
             }
 
             .notice-title {
-                color: #d36313;
-                font-weight: 850;
+                color: #cf6715;
                 font-size: 1.05rem;
+                font-weight: 850;
                 margin-bottom: 0.2rem;
             }
 
             .soft-caption {
-                color: #6c746e;
+                color: #6c756d;
                 font-size: 0.88rem;
-            }
-
-            div[data-testid="stButton"] > button,
-            div[data-testid="stDownloadButton"] > button {
-                border-radius: 12px;
-                font-weight: 750;
-            }
-
-            div[data-testid="stForm"] {
-                border-radius: 18px;
-                border: 1px solid rgba(18, 63, 24, 0.10);
-                padding: 0.9rem;
-                box-shadow: 0 6px 18px rgba(0, 0, 0, 0.035);
             }
         </style>
         """,
@@ -306,14 +352,16 @@ def require_login() -> None:
     if st.session_state.get("authenticated") is True:
         return
 
-    left, center, right = st.columns([1, 1.15, 1])
+    left, center, right = st.columns([1, 1.1, 1])
     with center:
         st.markdown(
             """
             <div class="hero-card">
-                <p class="hero-title">🥗 Acesso administrativo</p>
-                <div class="hero-subtitle">Entre para editar o cardápio semanal.</div>
-                <div class="sheet-pill">🔒 Painel protegido</div>
+                <div class="hero-title">Acesso administrativo</div>
+                <div class="hero-subtitle">
+                    Entre para editar o cardápio semanal com segurança.
+                </div>
+                <div class="sheet-pill">Painel protegido</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -322,7 +370,11 @@ def require_login() -> None:
         with st.form("login_form", clear_on_submit=False):
             username = st.text_input("Usuário")
             password = st.text_input("Senha", type="password")
-            submitted = st.form_submit_button("Entrar", type="primary", use_container_width=True)
+            submitted = st.form_submit_button(
+                "Entrar",
+                type="primary",
+                use_container_width=True,
+            )
 
         if submitted:
             if authenticate(username, password, auth_config):
@@ -373,8 +425,7 @@ def load_menu_dataframe(sheet_id: str, worksheet_name: str) -> pd.DataFrame:
     if not records:
         return pd.DataFrame(columns=SHEET_COLUMNS)
 
-    dataframe = pd.DataFrame(records)
-    return normalize_dataframe(dataframe)
+    return normalize_dataframe(pd.DataFrame(records))
 
 
 def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -384,9 +435,8 @@ def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
             normalized[column] = ""
 
     normalized = normalized[SHEET_COLUMNS].fillna("")
-    normalized["dia"] = normalized["dia"].astype(str).str.strip()
-    normalized["data"] = normalized["data"].astype(str).str.strip()
-    normalized["ultima_atualizacao"] = normalized["ultima_atualizacao"].astype(str).str.strip()
+    for column in SHEET_COLUMNS:
+        normalized[column] = normalized[column].astype(str).str.strip()
     return normalized
 
 
@@ -394,7 +444,6 @@ def save_menu_dataframe(config: AppConfig, dataframe: pd.DataFrame) -> None:
     worksheet = get_gspread_client().open_by_key(config.sheet_id).worksheet(
         config.worksheet_name
     )
-
     normalized = normalize_dataframe(dataframe)
     rows = [SHEET_COLUMNS] + normalized.astype(str).values.tolist()
     worksheet.clear()
@@ -411,9 +460,9 @@ def validate_dataframe(dataframe: pd.DataFrame) -> list[str]:
         if not any(str(value).strip() for value in row.values):
             continue
 
-        weekday = str(row["dia"]).strip()
-        date_value = str(row["data"]).strip()
-        updated_at = str(row["ultima_atualizacao"]).strip()
+        weekday = row["dia"]
+        date_value = row["data"]
+        updated_at = row["ultima_atualizacao"]
 
         if weekday and weekday not in WEEKDAY_OPTIONS:
             errors.append(f"Linha {row_number}: dia inválido '{weekday}'.")
@@ -421,9 +470,7 @@ def validate_dataframe(dataframe: pd.DataFrame) -> list[str]:
         try:
             datetime.strptime(date_value, "%Y-%m-%d")
         except ValueError:
-            errors.append(
-                f"Linha {row_number}: data deve estar no formato YYYY-MM-DD."
-            )
+            errors.append(f"Linha {row_number}: data deve estar no formato YYYY-MM-DD.")
 
         if updated_at:
             try:
@@ -468,9 +515,19 @@ def format_display_date(weekday: str, iso_date: str) -> str:
     return f"{weekday_name}, {parsed.day} de {month_name}"
 
 
+def get_row_options(dataframe: pd.DataFrame) -> list[str]:
+    options: list[str] = []
+    for index, row in normalize_dataframe(dataframe).reset_index(drop=True).iterrows():
+        weekday = row["dia"] or "Dia"
+        iso_date = row["data"] or "sem-data"
+        main_dish = row["prato_principal"] or "sem prato"
+        options.append(f"{index} | {weekday} | {iso_date} | {main_dish}")
+    return options
+
+
 def render_sidebar() -> AppConfig:
     with st.sidebar:
-        st.markdown("## ⚙️ Configuração")
+        st.markdown("## Configuração")
         sheet_id = st.text_input("ID da planilha", value=DEFAULT_SHEET_ID)
         worksheet_name = st.text_input("Nome da aba", value=DEFAULT_WORKSHEET)
         st.info("Compartilhe a planilha com o e-mail do service account como Editor.")
@@ -487,11 +544,16 @@ def render_header() -> None:
     st.markdown(
         """
         <div class="hero-card">
-            <p class="hero-title">🥗 Painel do Cardápio</p>
-            <div class="hero-subtitle">
-                Cadastre e atualize o almoço da semana sem abrir a planilha manualmente.
+            <div class="hero-top">
+                <div>
+                    <div class="hero-title">Painel do Cardápio</div>
+                    <div class="hero-subtitle">
+                        Cadastre e atualize o almoço da semana sem abrir a planilha manualmente.
+                    </div>
+                </div>
+                <div class="hero-logo">Swiss Park</div>
             </div>
-            <div class="sheet-pill">📄 Google Sheets conectado</div>
+            <div class="sheet-pill">Google Sheets conectado</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -500,111 +562,114 @@ def render_header() -> None:
 
 def render_metrics(dataframe: pd.DataFrame) -> None:
     normalized = normalize_dataframe(dataframe)
-    total_days = len(normalized[normalized["data"].astype(str).str.strip() != ""])
-    last_update_values = [
-        value for value in normalized["ultima_atualizacao"].astype(str).tolist() if value.strip()
-    ]
-    last_update = last_update_values[-1] if last_update_values else "-"
-    filled_main_dishes = normalized["prato_principal"].astype(str).str.strip().ne("").sum()
+    total_days = len(normalized[normalized["data"].ne("")])
+    filled_main_dishes = normalized["prato_principal"].ne("").sum()
+    last_updates = [value for value in normalized["ultima_atualizacao"].tolist() if value]
+    last_update = last_updates[-1] if last_updates else "-"
 
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-label">Dias cadastrados</div>
-                <div class="metric-value">{total_days}</div>
+    cards = [
+        ("Dias cadastrados", str(total_days)),
+        ("Pratos principais", str(filled_main_dishes)),
+        ("Última atualização", last_update),
+    ]
+
+    for column, (label, value) in zip([col1, col2, col3], cards):
+        with column:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">{html.escape(label)}</div>
+                    <div class="metric-value">{html.escape(value)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def initialize_draft(dataframe: pd.DataFrame, config: AppConfig) -> None:
+    sheet_key = f"{config.sheet_id}:{config.worksheet_name}"
+    if st.session_state.get("draft_sheet_key") != sheet_key:
+        st.session_state["draft_sheet_key"] = sheet_key
+        st.session_state["draft_df"] = normalize_dataframe(dataframe).copy()
+
+
+def get_draft_dataframe() -> pd.DataFrame:
+    draft = st.session_state.get("draft_df")
+    if draft is None or not isinstance(draft, pd.DataFrame):
+        draft = build_default_dataframe()
+        st.session_state["draft_df"] = draft
+    return normalize_dataframe(draft)
+
+
+def set_draft_dataframe(dataframe: pd.DataFrame) -> None:
+    st.session_state["draft_df"] = normalize_dataframe(dataframe).copy()
+
+
+def render_quick_edit(dataframe: pd.DataFrame) -> None:
+    st.markdown(
+        """
+        <div class="panel-card">
+            <div class="panel-title">Edição rápida por dia</div>
+            <div class="panel-subtitle">
+                Altere um dia específico sem mexer na tabela inteira.
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with col2:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-label">Pratos principais</div>
-                <div class="metric-value">{filled_main_dishes}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with col3:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-label">Última atualização</div>
-                <div class="metric-value">{last_update}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-
-def get_row_options(dataframe: pd.DataFrame) -> list[str]:
-    options: list[str] = []
-    for index, row in normalize_dataframe(dataframe).reset_index(drop=True).iterrows():
-        weekday = str(row["dia"]).strip() or "Dia"
-        iso_date = str(row["data"]).strip() or "sem-data"
-        main_dish = str(row["prato_principal"]).strip() or "sem prato"
-        options.append(f"{index} | {weekday} | {iso_date} | {main_dish}")
-    return options
-
-
-def render_quick_edit(dataframe: pd.DataFrame) -> pd.DataFrame:
     normalized = normalize_dataframe(dataframe).reset_index(drop=True)
-
-    st.markdown("### ✏️ Edição rápida por dia")
-    st.caption("Use esta área para alterar um dia específico sem mexer na tabela inteira.")
-
     if normalized.empty:
         normalized = build_default_dataframe()
 
     options = get_row_options(normalized)
-    selected_option = st.selectbox("Selecione o dia para editar", options=options)
+    selected_option = st.selectbox(
+        "Selecione o dia para editar",
+        options=options,
+        key="quick_edit_day",
+    )
     selected_index = int(selected_option.split(" | ", maxsplit=1)[0])
     current = normalized.iloc[selected_index]
 
     with st.form("quick_edit_form"):
-        col1, col2, col3 = st.columns([1, 1, 1])
+        col1, col2, col3 = st.columns(3)
         with col1:
             dia = st.selectbox(
                 "Dia da semana",
                 options=WEEKDAY_OPTIONS,
-                index=WEEKDAY_OPTIONS.index(current["dia"]) if current["dia"] in WEEKDAY_OPTIONS else 0,
+                index=WEEKDAY_OPTIONS.index(current["dia"])
+                if current["dia"] in WEEKDAY_OPTIONS
+                else 0,
             )
         with col2:
             data_value = st.date_input("Data", value=parse_iso_date(current["data"]))
         with col3:
             ultima_atualizacao = st.text_input(
                 "Última atualização",
-                value=str(current["ultima_atualizacao"] or datetime.now().strftime("%H:%M")),
+                value=current["ultima_atualizacao"] or datetime.now().strftime("%H:%M"),
                 help="Formato HH:MM",
             )
 
-        prato_principal = st.text_input(
-            "Prato principal",
-            value=str(current["prato_principal"]),
-            placeholder="Ex.: Frango grelhado",
-        )
-        acompanhamento = st.text_input(
-            "Acompanhamento",
-            value=str(current["acompanhamento"]),
-            placeholder="Ex.: Arroz, feijão e purê",
-        )
+        prato_principal = st.text_input("Prato principal", value=current["prato_principal"])
+        acompanhamento = st.text_input("Acompanhamento", value=current["acompanhamento"])
         col4, col5 = st.columns(2)
         with col4:
-            salada = st.text_input("Salada", value=str(current["salada"]))
+            salada = st.text_input("Salada", value=current["salada"])
         with col5:
-            sobremesa = st.text_input("Sobremesa", value=str(current["sobremesa"]))
+            sobremesa = st.text_input("Sobremesa", value=current["sobremesa"])
 
         aviso = st.text_area(
             "Aviso do dia",
-            value=str(current["aviso"]),
-            placeholder="Ex.: Cardápio sujeito a alterações.",
-            height=90,
+            value=current["aviso"],
+            height=100,
         )
 
-        submitted = st.form_submit_button("Aplicar alteração neste dia", type="primary", use_container_width=True)
+        submitted = st.form_submit_button(
+            "Aplicar alteração neste dia",
+            type="primary",
+            use_container_width=True,
+        )
 
     if submitted:
         normalized.loc[selected_index, SHEET_COLUMNS] = {
@@ -617,17 +682,26 @@ def render_quick_edit(dataframe: pd.DataFrame) -> pd.DataFrame:
             "aviso": aviso.strip(),
             "ultima_atualizacao": ultima_atualizacao.strip(),
         }
-        st.success("Alteração aplicada na tela. Clique em Salvar na planilha para gravar no Google Sheets.")
+        set_draft_dataframe(normalized)
+        st.success("Alteração aplicada na tela. Agora você pode salvar na planilha.")
 
-    return normalized
 
-
-def render_complete_editor(dataframe: pd.DataFrame) -> pd.DataFrame:
-    st.markdown("### 🧾 Tabela completa")
-    st.caption("Use este modo para adicionar/remover linhas ou fazer ajustes em massa.")
+def render_complete_editor(dataframe: pd.DataFrame) -> None:
+    st.markdown(
+        """
+        <div class="panel-card">
+            <div class="panel-title">Tabela completa</div>
+            <div class="panel-subtitle">
+                Use este modo para adicionar, remover ou editar várias linhas.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     edited = st.data_editor(
         normalize_dataframe(dataframe),
+        key="full_editor",
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
@@ -638,9 +712,19 @@ def render_complete_editor(dataframe: pd.DataFrame) -> pd.DataFrame:
                 required=True,
                 width="small",
             ),
-            "data": st.column_config.TextColumn("Data", help="Formato YYYY-MM-DD", width="medium"),
-            "prato_principal": st.column_config.TextColumn("Prato principal", width="large"),
-            "acompanhamento": st.column_config.TextColumn("Acompanhamento", width="large"),
+            "data": st.column_config.TextColumn(
+                "Data",
+                help="Formato YYYY-MM-DD",
+                width="medium",
+            ),
+            "prato_principal": st.column_config.TextColumn(
+                "Prato principal",
+                width="large",
+            ),
+            "acompanhamento": st.column_config.TextColumn(
+                "Acompanhamento",
+                width="large",
+            ),
             "salada": st.column_config.TextColumn("Salada", width="medium"),
             "sobremesa": st.column_config.TextColumn("Sobremesa", width="medium"),
             "aviso": st.column_config.TextColumn("Aviso", width="large"),
@@ -651,64 +735,76 @@ def render_complete_editor(dataframe: pd.DataFrame) -> pd.DataFrame:
             ),
         },
     )
-    return normalize_dataframe(edited)
+    set_draft_dataframe(edited)
 
 
 def render_preview(dataframe: pd.DataFrame) -> None:
     normalized = normalize_dataframe(dataframe).reset_index(drop=True)
 
-    st.markdown("### 👀 Prévia visual")
-    st.caption("Veja como o cardápio deve aparecer para o usuário no app.")
+    st.markdown(
+        """
+        <div class="panel-card">
+            <div class="panel-title">Prévia do app</div>
+            <div class="panel-subtitle">
+                Visualize como o cardápio deve aparecer para o usuário final.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if normalized.empty:
         st.warning("Nenhum cardápio cadastrado para pré-visualizar.")
         return
 
     preview_options = get_row_options(normalized)
-    selected_option = st.selectbox("Dia para pré-visualizar", options=preview_options, key="preview_day")
+    selected_option = st.selectbox(
+        "Dia para pré-visualizar",
+        options=preview_options,
+        key="preview_day",
+    )
     selected_index = int(selected_option.split(" | ", maxsplit=1)[0])
     row = normalized.iloc[selected_index]
 
     chips_html = "".join(
-        f'<div class="day-chip {"active" if day == row["dia"] else ""}">📅 {day}</div>'
+        f'<div class="day-chip {"active" if day == row["dia"] else ""}">{html.escape(day)}</div>'
         for day in WEEKDAY_OPTIONS[:5]
     )
 
-    display_date = format_display_date(str(row["dia"]), str(row["data"]))
-    aviso = str(row["aviso"]).strip() or "Cardápio sujeito a alterações."
-    ultima = str(row["ultima_atualizacao"]).strip() or "--:--"
+    display_date = html.escape(format_display_date(row["dia"], row["data"]))
+    aviso = html.escape(row["aviso"] or "Cardápio sujeito a alterações.")
+    ultima = html.escape(row["ultima_atualizacao"] or "--:--")
 
     st.markdown(
         f"""
-        <div class="preview-wrapper">
+        <div class="preview-shell">
             <div style="font-size: 2rem; font-weight: 850; color: #123f18;">Cardápio Semanal</div>
             <div class="soft-caption">Consulte o cardápio da semana</div>
-            <div class="sheet-pill">📄 Atualizado via Google Sheets</div>
             <div class="day-chip-row">{chips_html}</div>
-            <div class="date-banner">📅 {display_date}</div>
+            <div class="date-banner">{display_date}</div>
             <div class="meal-card">
-                <div class="meal-title">🍽️ Almoço</div>
+                <div class="meal-title">Almoço</div>
                 <div class="menu-row">
                     <div class="menu-label">Prato principal</div>
-                    <div class="menu-value">{row['prato_principal']}</div>
+                    <div class="menu-value">{html.escape(row["prato_principal"])}</div>
                 </div>
                 <div class="menu-row">
                     <div class="menu-label">Acompanhamento</div>
-                    <div class="menu-value">{row['acompanhamento']}</div>
+                    <div class="menu-value">{html.escape(row["acompanhamento"])}</div>
                 </div>
                 <div class="menu-row">
                     <div class="menu-label">Salada</div>
-                    <div class="menu-value">{row['salada']}</div>
+                    <div class="menu-value">{html.escape(row["salada"])}</div>
                 </div>
                 <div class="menu-row">
                     <div class="menu-label">Sobremesa</div>
-                    <div class="menu-value">{row['sobremesa']}</div>
+                    <div class="menu-value">{html.escape(row["sobremesa"])}</div>
                 </div>
             </div>
             <div class="notice-card">
-                <div class="notice-title">🔔 Avisos</div>
+                <div class="notice-title">Avisos</div>
                 <div>{aviso}</div>
-                <div class="soft-caption">🕒 Última atualização: {ultima}</div>
+                <div class="soft-caption">Última atualização: {ultima}</div>
             </div>
         </div>
         """,
@@ -716,17 +812,26 @@ def render_preview(dataframe: pd.DataFrame) -> None:
     )
 
 
-def save_actions(config: AppConfig, dataframe: pd.DataFrame, key_prefix: str) -> None:
-    st.divider()
-    col1, col2, col3 = st.columns([1.4, 1, 1])
+def render_csv_preview(dataframe: pd.DataFrame) -> None:
+    st.markdown(
+        """
+        <div class="panel-card">
+            <div class="panel-title">Prévia CSV</div>
+            <div class="panel-subtitle">
+                Este é o conteúdo que o Flutter pode consumir ao ler a planilha.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.code(normalize_dataframe(dataframe).to_csv(index=False), language="csv")
+
+
+def render_action_bar(config: AppConfig, dataframe: pd.DataFrame) -> None:
+    col1, col2, col3 = st.columns([1.45, 1, 1])
 
     with col1:
-        if st.button(
-            "💾 Salvar alterações na planilha",
-            type="primary",
-            use_container_width=True,
-            key=f"{key_prefix}_save_button",
-        ):
+        if st.button("Salvar alterações na planilha", type="primary", use_container_width=True):
             errors = validate_dataframe(dataframe)
             if errors:
                 for error in errors:
@@ -738,26 +843,22 @@ def save_actions(config: AppConfig, dataframe: pd.DataFrame, key_prefix: str) ->
                     st.error(f"Erro ao salvar: {error}")
                 else:
                     st.success("Planilha atualizada com sucesso.")
-                    st.balloons()
 
     with col2:
-        if st.button(
-            "🔄 Recarregar",
-            use_container_width=True,
-            key=f"{key_prefix}_reload_button",
-        ):
+        if st.button("Recarregar da planilha", use_container_width=True):
             load_menu_dataframe.clear()
+            st.session_state.pop("draft_sheet_key", None)
+            st.session_state.pop("draft_df", None)
             st.rerun()
 
     with col3:
         csv_data = normalize_dataframe(dataframe).to_csv(index=False).encode("utf-8-sig")
         st.download_button(
-            "⬇️ Baixar CSV",
+            "Baixar CSV",
             data=csv_data,
             file_name="cardapio.csv",
             mime="text/csv",
             use_container_width=True,
-            key=f"{key_prefix}_download_csv_button",
         )
 
 
@@ -789,31 +890,27 @@ def main() -> None:
     if dataframe.empty:
         dataframe = build_default_dataframe()
 
-    dataframe = normalize_dataframe(dataframe)
-    render_metrics(dataframe)
+    initialize_draft(dataframe, config)
+    render_metrics(get_draft_dataframe())
+    st.write("")
+    render_action_bar(config, get_draft_dataframe())
     st.write("")
 
     tab_quick, tab_table, tab_preview, tab_csv = st.tabs(
-        ["✏️ Edição rápida", "🧾 Tabela completa", "👀 Prévia do app", "📤 CSV"]
+        ["Edição rápida", "Tabela completa", "Prévia do app", "CSV"]
     )
 
-    working_dataframe = dataframe
-
     with tab_quick:
-        working_dataframe = render_quick_edit(working_dataframe)
-        save_actions(config, working_dataframe, key_prefix="quick")
+        render_quick_edit(get_draft_dataframe())
 
     with tab_table:
-        table_dataframe = render_complete_editor(working_dataframe)
-        save_actions(config, table_dataframe, key_prefix="table")
+        render_complete_editor(get_draft_dataframe())
 
     with tab_preview:
-        render_preview(working_dataframe)
+        render_preview(get_draft_dataframe())
 
     with tab_csv:
-        st.markdown("### 📤 Prévia CSV")
-        st.caption("Este é o conteúdo que será usado pelo Flutter ao ler a planilha como CSV.")
-        st.code(normalize_dataframe(working_dataframe).to_csv(index=False), language="csv")
+        render_csv_preview(get_draft_dataframe())
 
 
 if __name__ == "__main__":
