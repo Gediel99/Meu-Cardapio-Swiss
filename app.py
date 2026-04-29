@@ -132,6 +132,48 @@ def inject_css() -> None:
                 border-radius: 14px;
                 font-weight: 700;
                 min-height: 2.8rem;
+                border: 1px solid rgba(18, 63, 24, 0.12);
+                box-shadow: none;
+            }
+
+            div[data-testid="stButton"] > button[kind="primary"],
+            div[data-testid="stFormSubmitButton"] > button[kind="primary"] {
+                background: linear-gradient(180deg, #3d9442 0%, #2f7d32 100%) !important;
+                color: #ffffff !important;
+                border: 1px solid #2f7d32 !important;
+            }
+
+            div[data-testid="stButton"] > button[kind="secondary"],
+            div[data-testid="stDownloadButton"] > button {
+                background: rgba(255, 255, 255, 0.96) !important;
+                color: #37433a !important;
+                border: 1px solid rgba(18, 63, 24, 0.14) !important;
+            }
+
+            div[data-testid="stButton"] > button:hover,
+            div[data-testid="stDownloadButton"] > button:hover,
+            div[data-testid="stFormSubmitButton"] > button:hover {
+                border-color: #2f7d32 !important;
+                color: #123f18 !important;
+            }
+
+            div[data-testid="stButton"] > button[kind="primary"]:hover,
+            div[data-testid="stFormSubmitButton"] > button[kind="primary"]:hover {
+                color: #ffffff !important;
+                filter: brightness(1.02);
+            }
+
+            button[data-baseweb="tab"] {
+                color: #4f5c53 !important;
+                font-weight: 650 !important;
+            }
+
+            button[data-baseweb="tab"][aria-selected="true"] {
+                color: #2f7d32 !important;
+            }
+
+            [data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+                background-color: #2f7d32 !important;
             }
 
             div[data-testid="stDataFrame"] {
@@ -177,6 +219,22 @@ def inject_css() -> None:
                 color: #123f18;
                 font-weight: 800;
                 font-size: 1.05rem;
+            }
+
+            @media (max-width: 900px) {
+                .hero-top {
+                    flex-direction: column;
+                }
+
+                .hero-logo {
+                    min-width: auto;
+                    text-align: left;
+                }
+
+                .menu-row {
+                    grid-template-columns: 1fr;
+                    gap: 0.25rem;
+                }
             }
 
             .sheet-pill {
