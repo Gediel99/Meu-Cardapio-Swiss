@@ -113,7 +113,7 @@ def inject_css() -> None:
 
             .block-container {
                 max-width: 1160px;
-                padding-top: 1.3rem;
+                padding-top: 3.4rem;
                 padding-bottom: 2rem;
             }
 
@@ -123,7 +123,7 @@ def inject_css() -> None:
             }
 
             [data-testid="stSidebarContent"] {
-                padding-top: 1.25rem;
+                padding-top: 3.2rem;
             }
 
             div[data-testid="stButton"] > button,
