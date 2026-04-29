@@ -742,14 +742,23 @@ def format_display_date(weekday: str, iso_date: str) -> str:
     return f"{weekday_name}, {parsed.day} de {month_name}"
 
 
-def get_row_options(dataframe: pd.DataFrame) -> list[str]:
-    options: list[str] = []
-    for index, row in normalize_dataframe(dataframe).reset_index(drop=True).iterrows():
-        weekday = row["dia"] or "Dia"
-        iso_date = row["data"] or "sem-data"
-        main_dish = row["prato_principal"] or "sem prato"
-        options.append(f"{index} | {weekday} | {iso_date} | {main_dish}")
-    return options
+def format_short_date(iso_date: str) -> str:
+    parsed = parse_iso_date(iso_date)
+    return parsed.strftime("%d/%m")
+
+
+def get_row_indices(dataframe: pd.DataFrame) -> list[int]:
+    return list(range(len(normalize_dataframe(dataframe).reset_index(drop=True))))
+
+
+def get_row_display_label(dataframe: pd.DataFrame, index: int) -> str:
+    normalized = normalize_dataframe(dataframe).reset_index(drop=True)
+    row = normalized.iloc[index]
+    weekday_short = row["dia"] or "Dia"
+    weekday_full = WEEKDAY_FULL_NAMES.get(weekday_short, weekday_short)
+    short_date = format_short_date(row["data"])
+    main_dish = row["prato_principal"] or "Sem prato definido"
+    return f"{weekday_full} • {short_date} • {main_dish}"
 
 
 def render_sidebar() -> AppConfig:
@@ -951,13 +960,13 @@ def render_quick_edit(dataframe: pd.DataFrame) -> None:
     if normalized.empty:
         normalized = build_default_dataframe()
 
-    options = get_row_options(normalized)
-    selected_option = st.selectbox(
+    options = get_row_indices(normalized)
+    selected_index = st.selectbox(
         "Selecione o dia para editar",
         options=options,
         key="quick_edit_day",
+        format_func=lambda index: get_row_display_label(normalized, index),
     )
-    selected_index = int(selected_option.split(" | ", maxsplit=1)[0])
     current = normalized.iloc[selected_index]
 
     with st.form("quick_edit_form"):
@@ -1071,13 +1080,13 @@ def render_preview(dataframe: pd.DataFrame) -> None:
         st.warning("Nenhum cardápio cadastrado para pré-visualizar.")
         return
 
-    preview_options = get_row_options(normalized)
-    selected_option = st.selectbox(
+    preview_options = get_row_indices(normalized)
+    selected_index = st.selectbox(
         "Dia para pré-visualizar",
         options=preview_options,
         key="preview_day",
+        format_func=lambda index: get_row_display_label(normalized, index),
     )
-    selected_index = int(selected_option.split(" | ", maxsplit=1)[0])
     row = normalized.iloc[selected_index]
 
     chips_html = "".join(
