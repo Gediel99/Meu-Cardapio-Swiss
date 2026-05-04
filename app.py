@@ -1045,6 +1045,7 @@ def render_day_button_picker(
     *,
     state_key: str,
     caption: str,
+    full_labels: bool = False,
 ) -> int:
     normalized = normalize_dataframe(dataframe).reset_index(drop=True)
     options = get_row_indices(normalized)
@@ -1057,18 +1058,31 @@ def render_day_button_picker(
         st.session_state[state_key] = options[0]
         current_value = options[0]
 
-    selected_index = st.segmented_control(
-        caption,
-        options=options,
-        format_func=lambda index: str(normalized.iloc[index]["dia"]).strip()
-        or f"Dia {index + 1}",
-        key=state_key,
-        selection_mode="single",
+    st.markdown(
+        f"""
+        <div class="soft-caption" style="margin-top: 0.1rem; margin-bottom: 0.45rem;">
+            {html.escape(caption)}
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    if selected_index is None:
-        selected_index = current_value
-        st.session_state[state_key] = selected_index
+    columns = st.columns(len(options), gap="small")
+    selected_index = current_value
+
+    for column, index in zip(columns, options):
+        weekday_short = str(normalized.iloc[index]["dia"]).strip() or f"Dia {index + 1}"
+        label = WEEKDAY_FULL_NAMES.get(weekday_short, weekday_short) if full_labels else weekday_short
+
+        with column:
+            if st.button(
+                label,
+                key=f"{state_key}_{index}",
+                type="primary" if index == current_value else "secondary",
+                use_container_width=True,
+            ):
+                selected_index = index
+                st.session_state[state_key] = index
 
     selected_index = int(selected_index)
     st.caption(get_row_display_label(normalized, selected_index))
@@ -1647,6 +1661,7 @@ def render_app_preview(
             normalized,
             state_key=selectbox_key,
             caption=selectbox_label,
+            full_labels=not show_panel,
         )
         row = normalized.iloc[selected_index]
 
@@ -1701,6 +1716,7 @@ def render_downloads_section() -> None:
         """,
         unsafe_allow_html=True,
     )
+    st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
 
     if not files:
         st.info("Nenhuma build publicada ainda na pasta releases.")
@@ -1774,7 +1790,6 @@ def render_public_home(public_dataframe: pd.DataFrame, auth_config: AuthConfig) 
         st.markdown(
             f"""
             <div class="public-shell">
-                <div class="public-kicker">Cardápio da semana</div>
                 <h1 class="public-title">{APP_NAME}</h1>
             </div>
             """,
