@@ -985,6 +985,44 @@ def get_row_display_label(dataframe: pd.DataFrame, index: int) -> str:
     return f"{weekday_full} • {short_date} • {main_dish}"
 
 
+def render_day_button_picker(
+    dataframe: pd.DataFrame,
+    *,
+    state_key: str,
+    caption: str,
+) -> int:
+    normalized = normalize_dataframe(dataframe).reset_index(drop=True)
+    options = get_row_indices(normalized)
+
+    if not options:
+        return 0
+
+    current_value = st.session_state.get(state_key)
+    if current_value not in options:
+        st.session_state[state_key] = options[0]
+
+    st.caption(caption)
+    columns = st.columns(len(options))
+
+    for column, index in zip(columns, options):
+        row = normalized.iloc[index]
+        day_label = str(row["dia"]).strip() or f"Dia {index + 1}"
+        is_selected = st.session_state.get(state_key) == index
+
+        with column:
+            if st.button(
+                day_label,
+                key=f"{state_key}_button_{index}",
+                use_container_width=True,
+                type="primary" if is_selected else "secondary",
+            ):
+                st.session_state[state_key] = index
+
+    selected_index = int(st.session_state.get(state_key, options[0]))
+    st.caption(get_row_display_label(normalized, selected_index))
+    return selected_index
+
+
 def initialize_draft(dataframe: pd.DataFrame, config: AppConfig) -> None:
     sheet_key = f"{config.sheet_id}:{config.worksheet_name}"
     if st.session_state.get("draft_sheet_key") != sheet_key:
@@ -1308,12 +1346,10 @@ def render_quick_edit(dataframe: pd.DataFrame, sheet_id: str) -> None:
     if normalized.empty:
         normalized = build_default_dataframe()
 
-    options = get_row_indices(normalized)
-    selected_index = st.selectbox(
-        "Selecione o dia para editar",
-        options=options,
-        key="quick_edit_day",
-        format_func=lambda index: get_row_display_label(normalized, index),
+    selected_index = render_day_button_picker(
+        normalized,
+        state_key="quick_edit_day_button",
+        caption="Selecione o dia para editar",
     )
 
     templates = load_meal_templates(sheet_id)
@@ -1546,12 +1582,10 @@ def render_app_preview(
         st.warning("Nenhum cardápio cadastrado para pré-visualizar.")
         return
 
-    preview_options = get_row_indices(normalized)
-    selected_index = st.selectbox(
-        selectbox_label,
-        options=preview_options,
-        key=selectbox_key,
-        format_func=lambda index: get_row_display_label(normalized, index),
+    selected_index = render_day_button_picker(
+        normalized,
+        state_key=selectbox_key,
+        caption=selectbox_label,
     )
     row = normalized.iloc[selected_index]
 
