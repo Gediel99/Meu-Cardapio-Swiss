@@ -1405,7 +1405,11 @@ def render_quick_edit(dataframe: pd.DataFrame, sheet_id: str) -> None:
                 else 0,
             )
         with col2:
-            data_value = st.date_input("Data", value=parse_iso_date(current["data"]))
+            data_value = st.date_input(
+                "Data",
+                value=parse_iso_date(current["data"]),
+                format="DD/MM/YYYY",
+            )
         with col3:
             ultima_atualizacao = st.text_input(
                 "Última atualização",
