@@ -58,6 +58,15 @@ WEEKDAY_FULL_NAMES = {
     "Sab": "Sábado",
     "Dom": "Domingo",
 }
+WEEKDAY_BUTTON_NAMES = {
+    "Seg": "Segunda",
+    "Ter": "Terça",
+    "Qua": "Quarta",
+    "Qui": "Quinta",
+    "Sex": "Sexta",
+    "Sab": "Sábado",
+    "Dom": "Domingo",
+}
 MONTH_NAMES = {
     1: "janeiro",
     2: "fevereiro",
@@ -1072,7 +1081,11 @@ def render_day_button_picker(
 
     for column, index in zip(columns, options):
         weekday_short = str(normalized.iloc[index]["dia"]).strip() or f"Dia {index + 1}"
-        label = WEEKDAY_FULL_NAMES.get(weekday_short, weekday_short) if full_labels else weekday_short
+        label = (
+            WEEKDAY_BUTTON_NAMES.get(weekday_short, weekday_short)
+            if full_labels
+            else weekday_short
+        )
 
         with column:
             if st.button(
