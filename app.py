@@ -15,7 +15,7 @@ import pandas as pd
 import streamlit as st
 from google.oauth2.service_account import Credentials
 
-APP_NAME = "My Cardápio Swiss"
+APP_NAME = "Meu Cardápio Swiss"
 RELEASES_DIR = Path(__file__).resolve().parent / "releases"
 DEFAULT_SHEET_ID = "1lJznRnmCxV6ulrVsMBbnVi1qD-FCOapLfh3Hv7fxNoE"
 DEFAULT_WORKSHEET = "cardapio"
