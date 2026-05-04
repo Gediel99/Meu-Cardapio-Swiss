@@ -14,6 +14,7 @@ import pandas as pd
 import streamlit as st
 from google.oauth2.service_account import Credentials
 
+APP_NAME = "My Cardápio Swiss"
 DEFAULT_SHEET_ID = "1lJznRnmCxV6ulrVsMBbnVi1qD-FCOapLfh3Hv7fxNoE"
 DEFAULT_WORKSHEET = "cardapio"
 DEFAULT_USERS_WORKSHEET = "usuarios"
@@ -140,7 +141,7 @@ def inject_css() -> None:
 
             .block-container {
                 max-width: 1180px;
-                padding-top: 3.4rem;
+                padding-top: 2.2rem;
                 padding-bottom: 2rem;
             }
 
@@ -228,7 +229,7 @@ def inject_css() -> None:
             .hero-title {
                 margin: 0;
                 color: #123f18;
-                font-size: 2rem;
+                font-size: 2.15rem;
                 line-height: 1.06;
                 font-weight: 850;
             }
@@ -310,6 +311,59 @@ def inject_css() -> None:
                 background: #ffffff;
                 border: 1px solid rgba(46, 125, 50, 0.10);
                 box-shadow: 0 16px 40px rgba(18, 63, 24, 0.06);
+            }
+
+            .public-shell {
+                margin-bottom: 1.1rem;
+            }
+
+            .public-kicker {
+                display: inline-flex;
+                align-items: center;
+                padding: 0.4rem 0.72rem;
+                border-radius: 999px;
+                background: #eaf6e7;
+                border: 1px solid rgba(46, 125, 50, 0.16);
+                color: #2e7d32;
+                font-size: 0.84rem;
+                font-weight: 800;
+                margin-bottom: 0.85rem;
+            }
+
+            .public-title {
+                margin: 0;
+                color: #123f18;
+                font-size: 2.25rem;
+                line-height: 1.02;
+                font-weight: 900;
+            }
+
+            .public-subtitle {
+                margin: 0.6rem 0 0 0;
+                color: #657067;
+                font-size: 1rem;
+                max-width: 34rem;
+            }
+
+            .login-card {
+                padding: 1.1rem;
+                border-radius: 24px;
+                background: rgba(255, 255, 255, 0.94);
+                border: 1px solid rgba(18, 63, 24, 0.08);
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+            }
+
+            .login-title {
+                color: #123f18;
+                font-size: 1.2rem;
+                font-weight: 850;
+                margin-bottom: 0.2rem;
+            }
+
+            .login-subtitle {
+                color: #657067;
+                font-size: 0.94rem;
+                margin-bottom: 0.9rem;
             }
 
             .day-chip-row {
@@ -416,6 +470,10 @@ def inject_css() -> None:
                     grid-template-columns: 1fr;
                     gap: 0.25rem;
                 }
+
+                .public-title {
+                    font-size: 1.95rem;
+                }
             }
         </style>
         """,
@@ -496,6 +554,27 @@ def authenticate(
         pass
 
     return None
+
+
+def get_public_menu_dataframe() -> pd.DataFrame:
+    try:
+        dataframe = load_menu_dataframe(DEFAULT_SHEET_ID, DEFAULT_WORKSHEET)
+    except Exception:
+        return build_default_dataframe()
+
+    if dataframe.empty:
+        return build_default_dataframe()
+    return dataframe
+
+
+def render_login_gate(public_dataframe: pd.DataFrame) -> None:
+    auth_config = get_auth_config()
+
+    if st.session_state.get("authenticated") is True:
+        return
+
+    render_public_home(public_dataframe, auth_config)
+    st.stop()
 
 
 def require_login() -> None:
@@ -1441,6 +1520,152 @@ def render_preview(dataframe: pd.DataFrame) -> None:
     )
 
 
+def render_app_preview(
+    dataframe: pd.DataFrame,
+    *,
+    selectbox_key: str = "preview_day",
+    selectbox_label: str = "Dia para pré-visualizar",
+    show_panel: bool = True,
+) -> None:
+    normalized = normalize_dataframe(dataframe).reset_index(drop=True)
+
+    if show_panel:
+        st.markdown(
+            """
+            <div class="panel-card">
+                <div class="panel-title">Prévia do app</div>
+                <div class="panel-subtitle">
+                    Visualize como o cardápio deve aparecer para o usuário final.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    if normalized.empty:
+        st.warning("Nenhum cardápio cadastrado para pré-visualizar.")
+        return
+
+    preview_options = get_row_indices(normalized)
+    selected_index = st.selectbox(
+        selectbox_label,
+        options=preview_options,
+        key=selectbox_key,
+        format_func=lambda index: get_row_display_label(normalized, index),
+    )
+    row = normalized.iloc[selected_index]
+
+    chips_html = "".join(
+        f'<div class="day-chip {"active" if day == row["dia"] else ""}">{html.escape(day)}</div>'
+        for day in [item[0] for item in WEEK_TEMPLATE]
+    )
+
+    display_date = html.escape(format_display_date(row["dia"], row["data"]))
+    aviso = html.escape(row["aviso"] or "Cardápio sujeito a alterações.")
+    ultima = html.escape(row["ultima_atualizacao"] or "--:--")
+
+    st.markdown(
+        f"""
+        <div class="preview-shell">
+            <div style="font-size: 2rem; font-weight: 850; color: #123f18;">{APP_NAME}</div>
+            <div class="soft-caption">Consulte o almoço da semana</div>
+            <div class="day-chip-row">{chips_html}</div>
+            <div class="date-banner">{display_date}</div>
+            <div class="meal-card">
+                <div class="meal-title">Almoço</div>
+                <div class="menu-row">
+                    <div class="menu-label">Prato principal</div>
+                    <div class="menu-value">{html.escape(row["prato_principal"])}</div>
+                </div>
+                <div class="menu-row">
+                    <div class="menu-label">Acompanhamento</div>
+                    <div class="menu-value">{html.escape(row["acompanhamento"])}</div>
+                </div>
+                <div class="menu-row">
+                    <div class="menu-label">Salada</div>
+                    <div class="menu-value">{html.escape(row["salada"])}</div>
+                </div>
+                <div class="menu-row">
+                    <div class="menu-label">Sobremesa</div>
+                    <div class="menu-value">{html.escape(row["sobremesa"])}</div>
+                </div>
+            </div>
+            <div class="notice-card">
+                <div class="notice-title">Avisos</div>
+                <div>{aviso}</div>
+                <div class="soft-caption">Última atualização: {ultima}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_public_home(public_dataframe: pd.DataFrame, auth_config: AuthConfig) -> None:
+    st.markdown(
+        f"""
+        <div class="public-shell">
+            <div class="public-kicker">Cardápio da semana</div>
+            <h1 class="public-title">{APP_NAME}</h1>
+            <p class="public-subtitle">
+                Veja exatamente o que aparece no aplicativo e, se necessário, entre para atualizar o cardápio.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    preview_col, login_col = st.columns([1.45, 0.9], gap="large")
+
+    with preview_col:
+        render_app_preview(
+            public_dataframe,
+            selectbox_key="public_preview_day",
+            selectbox_label="Escolha o dia",
+            show_panel=False,
+        )
+
+    with login_col:
+        st.markdown(
+            """
+            <div class="login-card">
+                <div class="login-title">Área de edição</div>
+                <div class="login-subtitle">
+                    Funcionários e administradores entram aqui para cadastrar ou ajustar o cardápio.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if not auth_config.is_configured:
+            st.error("Login administrativo não configurado.")
+            st.info(
+                "Configure usuários e senhas nos Secrets do Streamlit Cloud "
+                "ou no arquivo .streamlit/secrets.toml local."
+            )
+            return
+
+        with st.form("login_form", clear_on_submit=False):
+            username = st.text_input("Usuário")
+            password = st.text_input("Senha", type="password")
+            submitted = st.form_submit_button(
+                "Entrar para editar",
+                type="primary",
+                use_container_width=True,
+            )
+
+        if submitted:
+            account = authenticate(username, password, auth_config)
+            if account is not None:
+                st.session_state["authenticated"] = True
+                st.session_state["auth_username"] = account.username
+                st.session_state["auth_role"] = account.role
+                st.rerun()
+            else:
+                st.error("Usuário ou senha inválidos.")
+
+
 def render_csv_preview(dataframe: pd.DataFrame) -> None:
     st.markdown(
         """
@@ -1510,7 +1735,8 @@ def main() -> None:
         layout="wide",
     )
     inject_css()
-    require_login()
+    public_dataframe = get_public_menu_dataframe()
+    render_login_gate(public_dataframe)
 
     config = render_sidebar()
     render_header()
@@ -1556,7 +1782,7 @@ def main() -> None:
             render_complete_editor(get_draft_dataframe())
 
         with tab_preview:
-            render_preview(get_draft_dataframe())
+            render_app_preview(get_draft_dataframe())
 
         with tab_csv:
             render_csv_preview(get_draft_dataframe())
@@ -1573,7 +1799,7 @@ def main() -> None:
             render_quick_edit(get_draft_dataframe(), config.sheet_id)
 
         with tab_preview:
-            render_preview(get_draft_dataframe())
+            render_app_preview(get_draft_dataframe())
 
 
 if __name__ == "__main__":
