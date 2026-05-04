@@ -1,6 +1,6 @@
 # Painel Streamlit
 
-Painel administrativo para editar a aba `cardapio` do Google Sheets e publicar no Streamlit Cloud.
+Painel público e administrativo para exibir o cardápio da semana, editar a aba `cardapio` do Google Sheets e publicar tudo no Streamlit Cloud.
 
 ## 1. Instalar dependências
 
@@ -40,8 +40,12 @@ client_email = "..."
 client_id = "..."
 token_uri = "https://oauth2.googleapis.com/token"
 
-[auth]
+[auth.admin]
 username = "admin"
+password = "sua-senha-forte"
+
+[auth.user]
+username = "funcionario"
 password = "sua-senha-forte"
 ```
 
@@ -52,18 +56,6 @@ streamlit run app.py
 ```
 
 ## 4. Perfis de acesso
-
-Você pode configurar dois perfis:
-
-```toml
-[auth.admin]
-username = "admin"
-password = "senha-admin"
-
-[auth.user]
-username = "funcionario"
-password = "senha-funcionario"
-```
 
 Também aceita variáveis de ambiente:
 
@@ -76,7 +68,7 @@ Também aceita variáveis de ambiente:
 
 ## 5. O que cada perfil vê
 
-- `admin`: edição rápida, tabela completa, prévia do app, CSV e configuração da planilha
+- `admin`: edição rápida, tabela completa, prévia do app, CSV, usuários e modelos
 - `user`: apenas edição rápida e prévia do app
 
 ## 6. Cadastro de funcionários no painel
@@ -112,3 +104,37 @@ Ele:
 - mantém o aviso padrão
 
 Assim você não precisa montar a estrutura da semana nova à mão.
+
+## 9. Downloads do aplicativo
+
+A home pública do Streamlit pode mostrar arquivos prontos para download quando eles estiverem dentro da pasta:
+
+```text
+releases/
+```
+
+Hoje foram preparados estes nomes:
+
+- `MyCardapioSwiss-android-release.apk`
+- `MyCardapioSwiss-windows-release.zip`
+
+## 10. Assinatura e confiança
+
+Para Android, o ideal é gerar a release com seu próprio keystore.
+
+No Flutter app, foi deixado pronto o suporte a:
+
+```text
+android/key.properties
+```
+
+Use o modelo:
+
+```text
+android/key.properties.example
+```
+
+Importante:
+
+- sem assinatura própria, o Android ainda consegue instalar, mas não é o cenário ideal para distribuição profissional
+- no Windows, aviso do SmartScreen não some só por “buildar”; o caminho certo é assinar o instalador com certificado digital de código

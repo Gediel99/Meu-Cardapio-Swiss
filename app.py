@@ -7,6 +7,7 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import gspread
@@ -15,6 +16,7 @@ import streamlit as st
 from google.oauth2.service_account import Credentials
 
 APP_NAME = "My Cardápio Swiss"
+RELEASES_DIR = Path(__file__).resolve().parent / "releases"
 DEFAULT_SHEET_ID = "1lJznRnmCxV6ulrVsMBbnVi1qD-FCOapLfh3Hv7fxNoE"
 DEFAULT_WORKSHEET = "cardapio"
 DEFAULT_USERS_WORKSHEET = "usuarios"
@@ -116,6 +118,40 @@ def get_secret_value(key: str, default: str = "") -> str:
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def format_file_size(num_bytes: int) -> str:
+    size = float(num_bytes)
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size < 1024 or unit == "GB":
+            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
+        size /= 1024
+    return f"{int(num_bytes)} B"
+
+
+def get_release_files() -> list[Path]:
+    if not RELEASES_DIR.exists():
+        return []
+
+    return sorted(
+        [path for path in RELEASES_DIR.iterdir() if path.is_file()],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+
+
+def get_release_label(file_path: Path) -> str:
+    suffix = file_path.suffix.lower()
+    name = file_path.name.lower()
+    if suffix == ".apk":
+        return "Android APK"
+    if suffix == ".aab":
+        return "Android App Bundle"
+    if suffix == ".zip" and "windows" in name:
+        return "Windows ZIP"
+    if suffix == ".exe":
+        return "Windows EXE"
+    return file_path.suffix.replace(".", "").upper() or "Arquivo"
 
 
 def is_admin() -> bool:
@@ -1646,23 +1682,103 @@ def render_app_preview(
         )
 
 
-def render_public_home(public_dataframe: pd.DataFrame, auth_config: AuthConfig) -> None:
+def render_downloads_section() -> None:
+    files = get_release_files()
+
     st.markdown(
-        f"""
-        <div class="public-shell">
-            <div class="public-kicker">Cardápio da semana</div>
-            <h1 class="public-title">{APP_NAME}</h1>
-            <p class="public-subtitle">
-                Veja exatamente o que aparece no aplicativo e, se necessário, entre para atualizar o cardápio.
-            </p>
+        """
+        <div class="panel-card" style="margin-top: 1rem;">
+            <div class="panel-title">Baixar o aplicativo</div>
+            <div class="panel-subtitle">
+                Use os arquivos abaixo para instalar a versão mais recente do app.
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    preview_col, login_col = st.columns([1.45, 0.9], gap="large")
+    if not files:
+        st.info("Nenhuma build publicada ainda na pasta releases.")
+        return
 
-    with preview_col:
+    for file_path in files:
+        file_bytes = file_path.read_bytes()
+        file_label = get_release_label(file_path)
+        file_size = format_file_size(file_path.stat().st_size)
+        st.download_button(
+            label=f"{file_label} • {file_size}",
+            data=file_bytes,
+            file_name=file_path.name,
+            mime="application/octet-stream",
+            use_container_width=True,
+            key=f"download_{file_path.name}",
+        )
+
+    st.caption(
+        "Android costuma instalar normalmente com o APK de release. "
+        "No Windows, para reduzir alertas do SmartScreen, o ideal é assinar o instalador com um certificado digital."
+    )
+
+
+def render_public_home(public_dataframe: pd.DataFrame, auth_config: AuthConfig) -> None:
+    _, top_action = st.columns([6, 1.7])
+
+    with top_action:
+        with st.popover("Área do funcionário", use_container_width=True):
+            st.markdown(
+                """
+                <div class="login-card">
+                    <div class="login-title">Área de edição</div>
+                    <div class="login-subtitle">
+                        Entre para cadastrar ou ajustar o cardápio.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if not auth_config.is_configured:
+                st.error("Login administrativo não configurado.")
+                st.info(
+                    "Configure usuários e senhas nos Secrets do Streamlit Cloud "
+                    "ou no arquivo .streamlit/secrets.toml local."
+                )
+            else:
+                with st.form("login_form", clear_on_submit=False):
+                    username = st.text_input("Usuário")
+                    password = st.text_input("Senha", type="password")
+                    submitted = st.form_submit_button(
+                        "Entrar para editar",
+                        type="primary",
+                        use_container_width=True,
+                    )
+
+                if submitted:
+                    account = authenticate(username, password, auth_config)
+                    if account is not None:
+                        st.session_state["authenticated"] = True
+                        st.session_state["auth_username"] = account.username
+                        st.session_state["auth_role"] = account.role
+                        st.rerun()
+                    else:
+                        st.error("Usuário ou senha inválidos.")
+
+    _, center_col, _ = st.columns([1.15, 4.5, 1.15])
+
+    with center_col:
+        st.markdown(
+            f"""
+            <div class="public-shell">
+                <div class="public-kicker">Cardápio da semana</div>
+                <h1 class="public-title">{APP_NAME}</h1>
+                <p class="public-subtitle">
+                    Veja exatamente o que aparece no aplicativo e, se necessário, entre para atualizar o cardápio.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         render_app_preview(
             public_dataframe,
             selectbox_key="public_preview_day",
@@ -1670,45 +1786,7 @@ def render_public_home(public_dataframe: pd.DataFrame, auth_config: AuthConfig) 
             show_panel=False,
         )
 
-    with login_col:
-        st.markdown(
-            """
-            <div class="login-card">
-                <div class="login-title">Área de edição</div>
-                <div class="login-subtitle">
-                    Funcionários e administradores entram aqui para cadastrar ou ajustar o cardápio.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        if not auth_config.is_configured:
-            st.error("Login administrativo não configurado.")
-            st.info(
-                "Configure usuários e senhas nos Secrets do Streamlit Cloud "
-                "ou no arquivo .streamlit/secrets.toml local."
-            )
-            return
-
-        with st.form("login_form", clear_on_submit=False):
-            username = st.text_input("Usuário")
-            password = st.text_input("Senha", type="password")
-            submitted = st.form_submit_button(
-                "Entrar para editar",
-                type="primary",
-                use_container_width=True,
-            )
-
-        if submitted:
-            account = authenticate(username, password, auth_config)
-            if account is not None:
-                st.session_state["authenticated"] = True
-                st.session_state["auth_username"] = account.username
-                st.session_state["auth_role"] = account.role
-                st.rerun()
-            else:
-                st.error("Usuário ou senha inválidos.")
+        render_downloads_section()
 
 
 def render_csv_preview(dataframe: pd.DataFrame) -> None:
