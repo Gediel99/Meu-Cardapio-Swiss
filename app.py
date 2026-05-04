@@ -1017,6 +1017,7 @@ def render_day_button_picker(
                 type="primary" if is_selected else "secondary",
             ):
                 st.session_state[state_key] = index
+                st.rerun()
 
     selected_index = int(st.session_state.get(state_key, options[0]))
     st.caption(get_row_display_label(normalized, selected_index))
@@ -1510,11 +1511,6 @@ def render_preview(dataframe: pd.DataFrame) -> None:
     )
     row = normalized.iloc[selected_index]
 
-    chips_html = "".join(
-        f'<div class="day-chip {"active" if day == row["dia"] else ""}">{html.escape(day)}</div>'
-        for day in [item[0] for item in WEEK_TEMPLATE]
-    )
-
     display_date = html.escape(format_display_date(row["dia"], row["data"]))
     aviso = html.escape(row["aviso"] or "Cardápio sujeito a alterações.")
     ultima = html.escape(row["ultima_atualizacao"] or "--:--")
@@ -1560,7 +1556,7 @@ def render_app_preview(
     dataframe: pd.DataFrame,
     *,
     selectbox_key: str = "preview_day",
-    selectbox_label: str = "Dia para pré-visualizar",
+    selectbox_label: str = "Dia para pr?-visualizar",
     show_panel: bool = True,
 ) -> None:
     normalized = normalize_dataframe(dataframe).reset_index(drop=True)
@@ -1569,9 +1565,9 @@ def render_app_preview(
         st.markdown(
             """
             <div class="panel-card">
-                <div class="panel-title">Prévia do app</div>
+                <div class="panel-title">Pr?via do app</div>
                 <div class="panel-subtitle">
-                    Visualize como o cardápio deve aparecer para o usuário final.
+                    Visualize como o card?pio deve aparecer para o usu?rio final.
                 </div>
             </div>
             """,
@@ -1579,34 +1575,36 @@ def render_app_preview(
         )
 
     if normalized.empty:
-        st.warning("Nenhum cardápio cadastrado para pré-visualizar.")
+        st.warning("Nenhum card?pio cadastrado para pr?-visualizar.")
         return
 
-    selected_index = render_day_button_picker(
-        normalized,
-        state_key=selectbox_key,
-        caption=selectbox_label,
-    )
-    row = normalized.iloc[selected_index]
-
-    chips_html = "".join(
-        f'<div class="day-chip {"active" if day == row["dia"] else ""}">{html.escape(day)}</div>'
-        for day in [item[0] for item in WEEK_TEMPLATE]
-    )
-
-    display_date = html.escape(format_display_date(row["dia"], row["data"]))
-    aviso = html.escape(row["aviso"] or "Cardápio sujeito a alterações.")
-    ultima = html.escape(row["ultima_atualizacao"] or "--:--")
-
-    st.markdown(
-        f"""
-        <div class="preview-shell">
+    with st.container(border=True):
+        st.markdown(
+            f"""
             <div style="font-size: 2rem; font-weight: 850; color: #123f18;">{APP_NAME}</div>
-            <div class="soft-caption">Consulte o almoço da semana</div>
-            <div class="day-chip-row">{chips_html}</div>
+            <div class="soft-caption" style="margin-top: 0.3rem; margin-bottom: 0.9rem;">
+                Consulte o almo?o da semana
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        selected_index = render_day_button_picker(
+            normalized,
+            state_key=selectbox_key,
+            caption=selectbox_label,
+        )
+        row = normalized.iloc[selected_index]
+
+        display_date = html.escape(format_display_date(row["dia"], row["data"]))
+        aviso = html.escape(row["aviso"] or "Card?pio sujeito a altera??es.")
+        ultima = html.escape(row["ultima_atualizacao"] or "--:--")
+
+        st.markdown(
+            f"""
             <div class="date-banner">{display_date}</div>
             <div class="meal-card">
-                <div class="meal-title">Almoço</div>
+                <div class="meal-title">Almo?o</div>
                 <div class="menu-row">
                     <div class="menu-label">Prato principal</div>
                     <div class="menu-value">{html.escape(row["prato_principal"])}</div>
@@ -1627,12 +1625,11 @@ def render_app_preview(
             <div class="notice-card">
                 <div class="notice-title">Avisos</div>
                 <div>{aviso}</div>
-                <div class="soft-caption">Última atualização: {ultima}</div>
+                <div class="soft-caption">?ltima atualiza??o: {ultima}</div>
             </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def render_public_home(public_dataframe: pd.DataFrame, auth_config: AuthConfig) -> None:
