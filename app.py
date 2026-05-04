@@ -1770,9 +1770,6 @@ def render_public_home(public_dataframe: pd.DataFrame, auth_config: AuthConfig) 
             <div class="public-shell">
                 <div class="public-kicker">Cardápio da semana</div>
                 <h1 class="public-title">{APP_NAME}</h1>
-                <p class="public-subtitle">
-                    Veja exatamente o que aparece no aplicativo e, se necessário, entre para atualizar o cardápio.
-                </p>
             </div>
             """,
             unsafe_allow_html=True,
