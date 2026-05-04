@@ -311,6 +311,10 @@ def inject_css() -> None:
                 background: #ffffff;
                 border: 1px solid rgba(46, 125, 50, 0.10);
                 box-shadow: 0 16px 40px rgba(18, 63, 24, 0.06);
+                width: 100%;
+                max-width: 100%;
+                box-sizing: border-box;
+                overflow: hidden;
             }
 
             .public-shell {
@@ -343,6 +347,12 @@ def inject_css() -> None:
                 color: #657067;
                 font-size: 1rem;
                 max-width: 34rem;
+            }
+
+            .public-topbar {
+                display: flex;
+                justify-content: flex-end;
+                margin-bottom: 0.35rem;
             }
 
             .login-card {
