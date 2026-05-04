@@ -358,7 +358,7 @@ def inject_css() -> None:
             }
 
             .public-shell {
-                margin-bottom: 1.1rem;
+                margin-bottom: 0.45rem;
             }
 
             .public-kicker {
@@ -380,6 +380,10 @@ def inject_css() -> None:
                 font-size: 2.25rem;
                 line-height: 1.02;
                 font-weight: 900;
+            }
+
+            .public-preview-gap {
+                height: 0.1rem;
             }
 
             .public-subtitle {
@@ -1685,7 +1689,7 @@ def render_downloads_section() -> None:
 
     st.markdown(
         """
-        <div class="panel-card" style="margin-top: 1rem;">
+        <div class="panel-card" style="margin-top: 1.75rem;">
             <div class="panel-title">Baixar o aplicativo</div>
             <div class="panel-subtitle">
                 Use o arquivo abaixo para instalar a versão mais recente do app.
@@ -1773,6 +1777,8 @@ def render_public_home(public_dataframe: pd.DataFrame, auth_config: AuthConfig) 
             """,
             unsafe_allow_html=True,
         )
+
+        st.markdown('<div class="public-preview-gap"></div>', unsafe_allow_html=True)
 
         render_app_preview(
             public_dataframe,
