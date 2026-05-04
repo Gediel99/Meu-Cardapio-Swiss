@@ -134,7 +134,11 @@ def get_release_files() -> list[Path]:
         return []
 
     return sorted(
-        [path for path in RELEASES_DIR.iterdir() if path.is_file()],
+        [
+            path
+            for path in RELEASES_DIR.iterdir()
+            if path.is_file() and path.suffix.lower() in {".apk", ".aab"}
+        ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
@@ -1047,25 +1051,20 @@ def render_day_button_picker(
     if current_value not in options:
         st.session_state[state_key] = options[0]
 
-    st.caption(caption)
-    columns = st.columns(len(options))
+    selected_index = st.segmented_control(
+        caption,
+        options=options,
+        default=int(st.session_state.get(state_key, options[0])),
+        format_func=lambda index: str(normalized.iloc[index]["dia"]).strip()
+        or f"Dia {index + 1}",
+        key=state_key,
+        selection_mode="single",
+    )
 
-    for column, index in zip(columns, options):
-        row = normalized.iloc[index]
-        day_label = str(row["dia"]).strip() or f"Dia {index + 1}"
-        is_selected = st.session_state.get(state_key) == index
+    if selected_index is None:
+        selected_index = options[0]
 
-        with column:
-            if st.button(
-                day_label,
-                key=f"{state_key}_button_{index}",
-                use_container_width=True,
-                type="primary" if is_selected else "secondary",
-            ):
-                st.session_state[state_key] = index
-                st.rerun()
-
-    selected_index = int(st.session_state.get(state_key, options[0]))
+    selected_index = int(selected_index)
     st.caption(get_row_display_label(normalized, selected_index))
     return selected_index
 
@@ -1606,7 +1605,7 @@ def render_app_preview(
     dataframe: pd.DataFrame,
     *,
     selectbox_key: str = "preview_day",
-    selectbox_label: str = "Dia para pr?-visualizar",
+    selectbox_label: str = "Dia para pré-visualizar",
     show_panel: bool = True,
 ) -> None:
     normalized = normalize_dataframe(dataframe).reset_index(drop=True)
@@ -1615,9 +1614,9 @@ def render_app_preview(
         st.markdown(
             """
             <div class="panel-card">
-                <div class="panel-title">Pr?via do app</div>
+                <div class="panel-title">Prévia do app</div>
                 <div class="panel-subtitle">
-                    Visualize como o card?pio deve aparecer para o usu?rio final.
+                    Visualize como o cardápio deve aparecer para o usuário final.
                 </div>
             </div>
             """,
@@ -1625,7 +1624,7 @@ def render_app_preview(
         )
 
     if normalized.empty:
-        st.warning("Nenhum card?pio cadastrado para pr?-visualizar.")
+        st.warning("Nenhum cardápio cadastrado para pré-visualizar.")
         return
 
     with st.container(border=True):
@@ -1633,7 +1632,7 @@ def render_app_preview(
             f"""
             <div style="font-size: 2rem; font-weight: 850; color: #123f18;">{APP_NAME}</div>
             <div class="soft-caption" style="margin-top: 0.3rem; margin-bottom: 0.9rem;">
-                Consulte o almo?o da semana
+                Consulte o almoço da semana
             </div>
             """,
             unsafe_allow_html=True,
@@ -1647,14 +1646,14 @@ def render_app_preview(
         row = normalized.iloc[selected_index]
 
         display_date = html.escape(format_display_date(row["dia"], row["data"]))
-        aviso = html.escape(row["aviso"] or "Card?pio sujeito a altera??es.")
+        aviso = html.escape(row["aviso"] or "Cardápio sujeito a alterações.")
         ultima = html.escape(row["ultima_atualizacao"] or "--:--")
 
         st.markdown(
             f"""
             <div class="date-banner">{display_date}</div>
             <div class="meal-card">
-                <div class="meal-title">Almo?o</div>
+                <div class="meal-title">Almoço</div>
                 <div class="menu-row">
                     <div class="menu-label">Prato principal</div>
                     <div class="menu-value">{html.escape(row["prato_principal"])}</div>
@@ -1675,7 +1674,7 @@ def render_app_preview(
             <div class="notice-card">
                 <div class="notice-title">Avisos</div>
                 <div>{aviso}</div>
-                <div class="soft-caption">?ltima atualiza??o: {ultima}</div>
+                <div class="soft-caption">Última atualização: {ultima}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1690,7 +1689,7 @@ def render_downloads_section() -> None:
         <div class="panel-card" style="margin-top: 1rem;">
             <div class="panel-title">Baixar o aplicativo</div>
             <div class="panel-subtitle">
-                Use os arquivos abaixo para instalar a versão mais recente do app.
+                Use o arquivo abaixo para instalar a versão mais recente do app.
             </div>
         </div>
         """,
@@ -1716,7 +1715,7 @@ def render_downloads_section() -> None:
 
     st.caption(
         "Android costuma instalar normalmente com o APK de release. "
-        "No Windows, para reduzir alertas do SmartScreen, o ideal é assinar o instalador com um certificado digital."
+        "Para distribuição mais profissional, o ideal é assinar a release com seu próprio keystore."
     )
 
 
