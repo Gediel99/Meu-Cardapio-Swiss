@@ -1630,7 +1630,6 @@ def render_app_preview(
     with st.container(border=True):
         st.markdown(
             f"""
-            <div style="font-size: 2rem; font-weight: 850; color: #123f18;">{APP_NAME}</div>
             <div class="soft-caption" style="margin-top: 0.3rem; margin-bottom: 0.9rem;">
                 Consulte o almoço da semana
             </div>
