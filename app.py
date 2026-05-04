@@ -383,7 +383,7 @@ def inject_css() -> None:
             }
 
             .public-preview-gap {
-                height: 0.1rem;
+                height: 0.42rem;
             }
 
             .public-subtitle {
@@ -491,8 +491,9 @@ def inject_css() -> None:
             }
 
             .notice-card {
-                padding: 0.9rem 1rem;
-                margin-top: 0.9rem;
+                padding: 1rem 1rem 1.05rem 1rem;
+                margin-top: 1rem;
+                margin-bottom: 0;
                 border-radius: 16px;
                 background: #fff8ea;
                 border: 1px solid rgba(223, 115, 23, 0.16);
@@ -1054,11 +1055,11 @@ def render_day_button_picker(
     current_value = st.session_state.get(state_key)
     if current_value not in options:
         st.session_state[state_key] = options[0]
+        current_value = options[0]
 
     selected_index = st.segmented_control(
         caption,
         options=options,
-        default=int(st.session_state.get(state_key, options[0])),
         format_func=lambda index: str(normalized.iloc[index]["dia"]).strip()
         or f"Dia {index + 1}",
         key=state_key,
@@ -1066,7 +1067,8 @@ def render_day_button_picker(
     )
 
     if selected_index is None:
-        selected_index = options[0]
+        selected_index = current_value
+        st.session_state[state_key] = selected_index
 
     selected_index = int(selected_index)
     st.caption(get_row_display_label(normalized, selected_index))
@@ -1682,6 +1684,7 @@ def render_app_preview(
             """,
             unsafe_allow_html=True,
         )
+        st.markdown("<div style='height: 0.22rem;'></div>", unsafe_allow_html=True)
 
 
 def render_downloads_section() -> None:
@@ -1689,7 +1692,7 @@ def render_downloads_section() -> None:
 
     st.markdown(
         """
-        <div class="panel-card" style="margin-top: 1.75rem;">
+        <div class="panel-card" style="margin-top: 1.15rem;">
             <div class="panel-title">Baixar o aplicativo</div>
             <div class="panel-subtitle">
                 Use o arquivo abaixo para instalar a versão mais recente do app.
