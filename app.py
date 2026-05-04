@@ -1096,6 +1096,7 @@ def render_day_button_picker(
             ):
                 selected_index = index
                 st.session_state[state_key] = index
+                st.rerun()
 
     selected_index = int(selected_index)
     st.caption(get_row_display_label(normalized, selected_index))
